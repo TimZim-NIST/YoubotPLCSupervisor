@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<safetyApplicationLanguageDiagram dslVersion="1.0.0.0" Id="ac840132-ced0-4404-8d14-68a344a51023" absoluteBounds="0, 0, 11, 8.5" name="TwinSAFE">
+  <safetyApplicationMoniker name="/" />
+  <nestedChildShapes>
+    <networkSwimLane Id="a06748aa-5bd0-4c68-b108-122345acc6e0" absoluteBounds="0, 0, 10.665000000000001, 7.45" expandBound="0, 0, 0, 0">
+      <networkMoniker name="//Network1" />
+      <nestedChildShapes>
+        <fBMonShape Id="ba9bea58-3686-4556-b19c-ffd01a6b04e3" absoluteBounds="1.5, 0.5, 3.35, 4.45">
+          <fBMonMoniker name="//Network1/FBMon1" />
+          <relativeChildShapes>
+            <inPortShape Id="941935db-901b-4999-9abb-3124f5b47690" absoluteBounds="1.43, 1.245, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/Restart" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="fc100c6c-bdb3-4c7a-b118-48e0dd1caa6b" absoluteBounds="1.43, 1.8075, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/MonIn1" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="06e006e5-b5f8-4dfa-b4d2-3dbe070b0cc4" absoluteBounds="1.43, 2.0325, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/MonIn2" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="14373dce-acd6-4577-8e50-41e0306807e2" absoluteBounds="1.43, 2.3475, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/MonIn3" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="fdd040db-c2a1-49d1-ba0d-f22878b2d9e7" absoluteBounds="1.43, 2.5725000000000002, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/MonIn4" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="abe48b12-603c-423c-aca2-e94482f74e1d" absoluteBounds="1.43, 3.1575, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/Secure1" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="efb8bca1-db45-49f6-bc97-ed24f023ee09" absoluteBounds="1.43, 3.3825000000000003, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/Secure2" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="3fd3520d-0763-4ad3-afd3-80ffea772c6f" absoluteBounds="1.43, 4.2375000000000007, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/EDM1" />
+              <relativeChildShapes />
+            </inPortShape>
+            <inPortShape Id="41716738-b20f-4327-add1-a3bd83724ead" absoluteBounds="1.43, 4.4625, 0.15, 0.15">
+              <inPortMoniker name="//Network1/FBMon1/EDM2" />
+              <relativeChildShapes />
+            </inPortShape>
+            <outPortShape Id="a74d71c2-298e-48f3-98d3-4eff023131de" absoluteBounds="4.73, 1.7850000000000001, 0.15, 0.15">
+              <outPortMoniker name="//Network1/FBMon1/Error" />
+              <relativeChildShapes />
+            </outPortShape>
+            <outPortShape Id="c2d1484c-404a-4702-8649-89df9b2349b0" absoluteBounds="4.73, 3.6750000000000003, 0.15, 0.15">
+              <outPortMoniker name="//Network1/FBMon1/MonOut" />
+              <relativeChildShapes />
+            </outPortShape>
+            <outPortShape Id="7412dbe2-f023-45f5-bf45-37cbe3d2f9ec" absoluteBounds="4.73, 3.9450000000000003, 0.15, 0.15">
+              <outPortMoniker name="//Network1/FBMon1/MonDelOut" />
+              <relativeChildShapes />
+            </outPortShape>
+            <paramPortShape Id="ce901fa1-6980-4ead-80b9-5c33c3f611c7" absoluteBounds="3.08, 3.8250000000000006, 0.7, 0.2">
+              <parameterPortMoniker name="//Network1/FBMon1/Delay Time (ms)" />
+              <relativeChildShapes />
+            </paramPortShape>
+          </relativeChildShapes>
+        </fBMonShape>
+      </nestedChildShapes>
+    </networkSwimLane>
+  </nestedChildShapes>
+</safetyApplicationLanguageDiagram>

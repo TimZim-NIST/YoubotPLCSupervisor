@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <GVL Name="GVL" Id="{50ea02b0-c830-4cd5-989d-76b679a04050}">
+    <Declaration><![CDATA[VAR_GLOBAL
+	mb_Input_Coils   : ARRAY [0..255] OF BOOL;
+	mb_Output_Coils : ARRAY [0..255] OF BOOL;
+	mb_Input_Registers : ARRAY [0..255] OF WORD;
+	mb_Output_Registers : ARRAY [0..255] OF WORD;
+END_VAR ]]></Declaration>
+  </GVL>
+</TcPlcObject>

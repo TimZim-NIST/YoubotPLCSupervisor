@@ -1,0 +1,158 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <POU Name="MAIN" Id="{635675c2-d5a6-4608-bab1-021d9b6144cd}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	station_1_sensor AT %I* : BOOL;
+	station_2_sensor AT %I* : BOOL;
+	station_3_sensor AT %I* : BOOL;
+	station_4_sensor AT %I* : BOOL;
+	station_5_sensor AT %I* : BOOL;
+	station_6_sensor AT %I* : BOOL;
+	
+	red_indicator AT %Q* : BOOL;
+	yellow_button AT %I* : BOOL;
+	yellow_indicator AT %Q* : BOOL;
+	green_button AT %I* : BOOL;
+	green_indicator  AT %Q* : BOOL;
+	black_switch AT %I* : BOOL;
+	
+	Station_1_Timer: TON;
+	Station_2_Timer: TON;
+	Station_3_Timer: TON;
+	Station_4_Timer: TON;
+	
+	Indicator_Flash_Timer: TON;
+	EStop_Flash_Timer: TON;
+	
+	FinishedParts : INT := 0;
+	part_counter_trigger: F_TRIG;
+	
+	MasterRunStop : BOOL;
+	StartButtonTimer: TON;
+	
+	ErrAck AT %Q* : BOOL;
+	EmergencyStop AT %I* : BOOL;
+	LightCurtainStatus AT %I* : BOOL;
+	EStopButtonStatus AT %I* : BOOL;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//////////////////////
+// STATION 1 TIMERS //
+//////////////////////
+Station_1_Timer(IN:=station_1_sensor, PT:=T#2.0S);
+Station_2_Timer(IN:=station_2_sensor, PT:=T#3.0S);
+Station_3_Timer(IN:=station_3_sensor, PT:=T#4.0S);
+Station_4_Timer(IN:=station_4_sensor, PT:=T#5.0S);
+
+///////////////////////////
+// SENSOR MODBUS UPDATES //
+///////////////////////////
+GVL.mb_Input_Coils[0] := station_1_sensor;
+GVL.mb_Input_Coils[2] := station_2_sensor;
+GVL.mb_Input_Coils[4] := station_3_sensor;
+GVL.mb_Input_Coils[6] := station_4_sensor;
+// Station 5 does not exist - this is a placeholder
+GVL.mb_Input_Coils[8] := 0;
+GVL.mb_Input_Coils[9] := 0;
+// Bits 10 and 11 are both set to the sensor value since ROS
+// translates both bits TRUE as meaning "ready for pickup",
+// and this station does not "process" the part
+GVL.mb_Input_Coils[10] := station_6_sensor;
+GVL.mb_Input_Coils[11] := station_6_sensor;
+
+///////////////////////////////////////
+// "READY FOR PICKUP" MODBUS UPDATES //
+///////////////////////////////////////
+GVL.mb_Input_Coils[1] := Station_1_Timer.Q;
+GVL.mb_Input_Coils[3] := Station_2_Timer.Q;
+GVL.mb_Input_Coils[5] := Station_3_Timer.Q;
+GVL.mb_Input_Coils[7] := Station_4_Timer.Q;
+
+///////////////////////////
+// BUTTON MODBUS UPDATES //
+///////////////////////////
+GVL.mb_Input_Coils[12] := 0;
+GVL.mb_Input_Coils[13] := red_indicator;
+GVL.mb_Input_Coils[14] := yellow_button;
+GVL.mb_Input_Coils[15] := yellow_indicator;
+GVL.mb_Input_Coils[16] := green_button;
+GVL.mb_Input_Coils[17] := green_indicator;
+GVL.mb_Input_Coils[18] := NOT black_switch;
+GVL.mb_Input_Coils[19] := 0;
+
+//////////////////
+// PART COUNTER //
+//////////////////
+part_counter_trigger(CLK:=Station_4_Timer.Q);
+IF part_counter_trigger.Q THEN
+	FinishedParts := FinishedParts + 1;
+END_IF
+
+/////////////////////
+// MASTER RUN/STOP //
+/////////////////////
+StartButtonTimer(IN:=green_button, PT:=T#2.0S);
+IF NOT black_switch = TRUE THEN
+	IF NOT MasterRunStop AND green_button AND StartButtonTimer.Q THEN
+		MasterRunStop := TRUE;
+	END_IF
+ELSE
+	MasterRunStop := FALSE;
+END_IF
+GVL.mb_Input_Coils[20] := MasterRunStop;
+
+//////////////////
+// RESET BUTTON //
+//////////////////
+IF yellow_button = TRUE THEN
+	IF NOT black_switch = FALSE THEN
+		FinishedParts := 0;
+	END_IF
+END_IF
+// DO NOT REMOVE - REQUIRED FOR SAFETY SYSTEM
+ErrAck := yellow_button;
+
+/////////////////////
+// INDICATOR LOGIC //
+/////////////////////
+Indicator_Flash_Timer(IN:=NOT Indicator_Flash_Timer.Q, PT:=T#0.5S);
+IF Indicator_Flash_Timer.Q THEN
+	IF NOT black_switch = TRUE AND MasterRunStop = FALSE THEN
+		yellow_indicator := NOT yellow_indicator;
+		IF EmergencyStop = TRUE THEN 
+			green_indicator := NOT yellow_indicator;
+		ELSE
+			green_indicator := FALSE;
+		END_IF
+	ELSIF NOT black_switch = FALSE THEN
+		green_indicator := FALSE;
+		yellow_indicator := NOT yellow_indicator;
+	END_IF
+END_IF
+IF MasterRunStop = TRUE THEN
+	yellow_indicator := FALSE;
+	green_indicator := TRUE;
+END_IF
+
+///////////////////////////////////////////
+// EMERGENCY STOP BUTTON INDICATOR LOGIC //
+///////////////////////////////////////////
+EStop_Flash_Timer(IN:=NOT EStop_Flash_Timer.Q, PT:=T#0.125S);
+IF EmergencyStop = TRUE AND NOT black_switch = TRUE THEN
+	red_indicator := TRUE;
+ELSIF EmergencyStop = TRUE AND NOT black_switch = FALSE THEN
+	red_indicator := FALSE;
+ELSE
+	IF MasterRunStop = TRUE THEN
+		MasterRunStop := FALSE;
+	END_IF
+	IF EStop_Flash_Timer.Q THEN
+		red_indicator := NOT red_indicator;
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
