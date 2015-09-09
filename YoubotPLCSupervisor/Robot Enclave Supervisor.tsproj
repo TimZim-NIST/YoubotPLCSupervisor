@@ -255,7 +255,7 @@
 								<Entry Name="FSOE__InputChannel2" Index="#x6001" Sub="#x02" Flags="#x00000020">
 									<Type>BIT</Type>
 								</Entry>
-								<Entry Name="FSOE__InputChannel3" Index="#x6001" Sub="#x03">
+								<Entry Name="FSOE__InputChannel3" Index="#x6001" Sub="#x03" Flags="#x00000020">
 									<Type>BIT</Type>
 								</Entry>
 								<Entry Name="FSOE__InputChannel4" Index="#x6001" Sub="#x04" Flags="#x00000020">
@@ -578,7 +578,8 @@
 		</Io>
 	</Project>
 	<Mappings>
-		<MappingInfo Identifier="{00000000-0000-0000-1000-040310000403}" Id="#x03070010"/>
+		<MappingInfo Identifier="{03040010-0010-0304-1000-040310000403}" Id="#x03070010" Watchdog="04000000040000000400000004000000"/>
+		<MappingInfo Identifier="{00000000-0011-0101-1000-010110000403}" Id="#x03070020"/>
 		<OwnerA Name="TIID^Device 1 (EtherCAT)">
 			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 2 (EL6900)">
 				<Link VarA="Term 1 (EK1200)^Term 3 (EL1904)^Module 1 (FSOES)^RxPDO^FSOE" VarB="ConnectionInputs^Message_2 TxPDO"/>
@@ -587,6 +588,28 @@
 			</OwnerB>
 			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 4 (EL2904)">
 				<Link VarA="Term 1 (EK1200)^Term 2 (EL6900)^ConnectionOutputs^Message_3 RxPDO" VarB="Module 1 (FSOES)^TxPDO^FSOE"/>
+			</OwnerB>
+		</OwnerA>
+		<OwnerA Name="TIPC^MainTask^MainTask Instance">
+			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 3 (EL1904)">
+				<Link VarA="PlcTask Inputs^MAIN.black_switch" VarB="Module 1 (FSOES)^TxPDO^FSOE^InputChannel4"/>
+				<Link VarA="PlcTask Inputs^MAIN.yellow_button" VarB="Module 1 (FSOES)^TxPDO^FSOE^InputChannel3"/>
+			</OwnerB>
+			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 5 (EL1018)">
+				<Link VarA="PlcTask Inputs^MAIN.station_1_sensor" VarB="Channel 7^Input"/>
+				<Link VarA="PlcTask Inputs^MAIN.station_2_sensor" VarB="Channel 5^Input"/>
+				<Link VarA="PlcTask Inputs^MAIN.station_3_sensor" VarB="Channel 3^Input"/>
+				<Link VarA="PlcTask Inputs^MAIN.station_4_sensor" VarB="Channel 1^Input"/>
+				<Link VarA="PlcTask Inputs^MAIN.station_6_sensor" VarB="Channel 2^Input"/>
+			</OwnerB>
+			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 6 (EL1018)">
+				<Link VarA="PlcTask Inputs^MAIN.EmergencyStop" VarB="Channel 2^Input"/>
+				<Link VarA="PlcTask Inputs^MAIN.green_button" VarB="Channel 3^Input"/>
+			</OwnerB>
+			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 7 (EL2828)">
+				<Link VarA="PlcTask Outputs^MAIN.green_indicator" VarB="Channel 5^Output"/>
+				<Link VarA="PlcTask Outputs^MAIN.red_indicator" VarB="Channel 1^Output"/>
+				<Link VarA="PlcTask Outputs^MAIN.yellow_indicator" VarB="Channel 3^Output"/>
 			</OwnerB>
 		</OwnerA>
 	</Mappings>

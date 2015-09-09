@@ -2,7 +2,7 @@
 <safetyApplicationLanguageDiagram dslVersion="1.0.0.0" Id="ac840132-ced0-4404-8d14-68a344a51023" absoluteBounds="0, 0, 11, 8.5" name="TwinSAFE">
   <safetyApplicationMoniker name="/" />
   <nestedChildShapes>
-    <networkSwimLane Id="a06748aa-5bd0-4c68-b108-122345acc6e0" absoluteBounds="0, 0, 10.665000000000001, 7.45" expandBound="0, 0, 0, 0">
+    <networkSwimLane Id="a06748aa-5bd0-4c68-b108-122345acc6e0" absoluteBounds="0, 0, 6.4580460214614872, 5.45" expandBound="0, 0, 0, 0">
       <networkMoniker name="//Network1" />
       <nestedChildShapes>
         <fBMonShape Id="ba9bea58-3686-4556-b19c-ffd01a6b04e3" absoluteBounds="1.5, 0.5, 3.35, 4.45">

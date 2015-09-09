@@ -105,8 +105,8 @@
                       <functionBlockPortHasPortMappings Id="4cfcc348-1879-4f5e-b8b0-ad185366d1b8">
                         <portMapping Id="d246138c-20d7-4ef1-ae3a-7e52781d6dde" name="FBMon1_MonOut_mapping" direction="output" dataType="safeBool" assignedVariable="EStop" physicalPorts="Term 4 (EL2904) - Module 1 (FSOES).Channel 1">
                           <aliasPorts>
-                            <portMappingHasAliasPorts Id="c3a74fd3-0218-44ae-8e9c-a103f86c261b">
-                              <aliasPort Id="3b66da58-18f0-4224-87da-f198b12e60f9" name="SdsId3.ChannelId1" sdsId="3" channelId="1" channelName="Channel 1" />
+                            <portMappingHasAliasPorts Id="db16f66a-9b6d-477e-ab45-a8b1cc2d019a">
+                              <aliasPort Id="31cca466-fae9-4a8d-a121-2ca0e35f09bf" name="SdsId3.ChannelId1" sdsId="3" channelId="1" channelName="Channel 1" />
                             </portMappingHasAliasPorts>
                           </aliasPorts>
                         </portMapping>
@@ -130,8 +130,8 @@
     </safetyApplicationHasNetworks>
   </networks>
   <twinSAFEGroupAliasPorts>
-    <safetyApplicationHasTwinSAFEGroupAliasPort Id="cc4c0502-85ad-4dfd-ac84-ca2895e58674">
-      <twinSAFEGroupAliasPort Id="a0bdf07d-9a84-4372-bb1a-8da0728b42c1" name="ErrAck.SdsId1.ChannelId1" sdsId="1" channelId="1" portName="ErrAck" />
+    <safetyApplicationHasTwinSAFEGroupAliasPort Id="c167ae32-97a7-4c52-a8d5-33ba61fea0e9">
+      <twinSAFEGroupAliasPort Id="ec85b990-2253-444b-8fbe-d48cb0364f70" name="ErrAck.SdsId2.ChannelId3" sdsId="2" channelId="3" portName="ErrAck" />
     </safetyApplicationHasTwinSAFEGroupAliasPort>
   </twinSAFEGroupAliasPorts>
 </safetyApplication>
