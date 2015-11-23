@@ -122,6 +122,10 @@
 							<Name>MAIN.ErrAck</Name>
 							<Type>BOOL</Type>
 						</Var>
+						<Var>
+							<Name>MAIN.overcurrent_relay</Name>
+							<Type>BOOL</Type>
+						</Var>
 					</Vars>
 				</Instance>
 			</Project>
@@ -610,6 +614,9 @@
 				<Link VarA="PlcTask Outputs^MAIN.green_indicator" VarB="Channel 5^Output"/>
 				<Link VarA="PlcTask Outputs^MAIN.red_indicator" VarB="Channel 1^Output"/>
 				<Link VarA="PlcTask Outputs^MAIN.yellow_indicator" VarB="Channel 3^Output"/>
+			</OwnerB>
+			<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1200)^Term 8 (EL2624)">
+				<Link VarA="PlcTask Outputs^MAIN.overcurrent_relay" VarB="Channel 1^Output"/>
 			</OwnerB>
 		</OwnerA>
 	</Mappings>

@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <DUT Name="Part" Id="{69cfe8f7-6820-4fe4-b464-8d8f862b3056}">
+    <Declaration><![CDATA[TYPE Part :
+STRUCT
+		sn 						: WORD := 0;
+		sta1_del 				: WORD := 0;
+		sta2_del 				: WORD := 0;
+		sta3_del 				: WORD := 0;
+		sta4_del 				: WORD := 0;
+		sta6_del 				: WORD := 0;
+		sta1_to_sta2_del 		: WORD := 0;
+		sta2_to_sta3_del 		: WORD := 0;
+		sta3_to_sta4_del 		: WORD := 0;
+		sta6_to_sta1_del 		: WORD := 0;
+		inspection				: WORD := 0;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
