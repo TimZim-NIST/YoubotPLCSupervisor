@@ -95,6 +95,11 @@ VAR
 	Station_4_Part_SN 		  : WORD := 0;
 	Station_6_Part_SN 		  : WORD := 1;
 	
+	EnclaveExperimentMode     : WORD := 0;
+	EnclaveExperimentTime     : WORD := 0;
+	EnclaveExperimentParts    : WORD := 0;
+	EnclaveExperimentTime_Counter : WORD := 0;
+	
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
@@ -218,6 +223,10 @@ GVL.mb_Output_Registers[5] := INT_TO_WORD(Station_1_DelayCounter);
 GVL.mb_Output_Registers[6] := INT_TO_WORD(Station_2_DelayCounter);
 GVL.mb_Output_Registers[7] := INT_TO_WORD(Station_3_DelayCounter);
 GVL.mb_Output_Registers[8] := INT_TO_WORD(Station_4_DelayCounter);
+
+EnclaveExperimentMode      := GVL.mb_Output_Registers[9];
+EnclaveExperimentTime      := GVL.mb_Output_Registers[10];
+EnclaveExperimentParts     := GVL.mb_Output_Registers[11];
 
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS OUT REGISTERS                                                           //
@@ -539,6 +548,37 @@ IF Station_4_FallingTrig.Q THEN
 	FinishedParts := FinishedParts + 1;
 END_IF
 
+////////////////////////////////////////////////////////////////////////////////////
+// EXPERIMENT COUNTER/TIMER                                                       //
+// ========================                                                       //
+// Description:                                                                   //
+//     The enclave can be instructed to run:                                      //
+//         * continuously                                                         //
+//         * for a specified amount of time                                       //
+//         * for a specified number of parts                                      //
+//     This is controlled via the HMI. The code to operate this is below. The     //
+//     mode of operation is selected in the HMI, and tracking is started once     //
+//     the MasterRunStop goes HIGH. Upon reaching a limit (# of parts, time) the  //
+//     PLC will set the MasterRunStop to FALSE, which will cease robot movement   //
+//     once they have completed their current movements.                          //
+////////////////////////////////////////////////////////////////////////////////////
+
+IF MasterRunStop = TRUE THEN
+	// Don't test for CONTINUOUS mode - only for counter and timer mode
+	IF EnclaveExperimentMode = 1 THEN // Part Counter Mode
+		IF FinishedParts >= WORD_TO_INT(EnclaveExperimentParts) THEN
+			MasterRunStop := FALSE;
+		END_IF
+	ELSIF EnclaveExperimentMode = 2 THEN // Timer Mode
+		IF EnclaveExperimentTime_Counter >= EnclaveExperimentTime THEN
+			MasterRunStop := FALSE;
+		END_IF
+		// TODO: Make this count SECONDS, not MILLISECONDS. We are limited to a MAX of WORD (65535) 
+		EnclaveExperimentTime_Counter := EnclaveExperimentTime_Counter + 1;
+	END_IF
+ELSE // If MasterRunStop is FALSE, then we need to clear the timer
+	EnclaveExperimentTime_Counter := 0;
+END_IF
 ]]></ST>
     </Implementation>
   </POU>
