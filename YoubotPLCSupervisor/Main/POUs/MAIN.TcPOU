@@ -96,9 +96,9 @@ VAR
 	Station_6_Part_SN 		  : WORD := 1;
 	
 	EnclaveExperimentMode     : WORD := 0;
-	EnclaveExperimentTime     : WORD := 0;
-	EnclaveExperimentParts    : WORD := 0;
+	EnclaveExperimentValue    : WORD := 0;
 	EnclaveExperimentTime_Counter : WORD := 0;
+	EnclaveExperimentTime_msCounter : WORD := 0;
 	
 END_VAR]]></Declaration>
     <Implementation>
@@ -223,10 +223,9 @@ GVL.mb_Output_Registers[5] := INT_TO_WORD(Station_1_DelayCounter);
 GVL.mb_Output_Registers[6] := INT_TO_WORD(Station_2_DelayCounter);
 GVL.mb_Output_Registers[7] := INT_TO_WORD(Station_3_DelayCounter);
 GVL.mb_Output_Registers[8] := INT_TO_WORD(Station_4_DelayCounter);
-
+ 
 EnclaveExperimentMode      := GVL.mb_Output_Registers[9];
-EnclaveExperimentTime      := GVL.mb_Output_Registers[10];
-EnclaveExperimentParts     := GVL.mb_Output_Registers[11];
+EnclaveExperimentValue     := GVL.mb_Output_Registers[10];
 
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS OUT REGISTERS                                                           //
@@ -564,17 +563,21 @@ END_IF
 ////////////////////////////////////////////////////////////////////////////////////
 
 IF MasterRunStop = TRUE THEN
-	// Don't test for CONTINUOUS mode - only for counter and timer mode
-	IF EnclaveExperimentMode = 1 THEN // Part Counter Mode
-		IF FinishedParts >= WORD_TO_INT(EnclaveExperimentParts) THEN
+	// Don't test for FREE RUN mode - only for PART COUNTER or TIMER mode
+	IF EnclaveExperimentMode = 1 THEN // Timer Mode
+		IF EnclaveExperimentTime_Counter >= EnclaveExperimentValue THEN
 			MasterRunStop := FALSE;
 		END_IF
-	ELSIF EnclaveExperimentMode = 2 THEN // Timer Mode
-		IF EnclaveExperimentTime_Counter >= EnclaveExperimentTime THEN
+		// Track the elapsed time (10 ms task, therefore 10ms*100iterations = 1 sec)
+		EnclaveExperimentTime_msCounter := EnclaveExperimentTime_msCounter + 1;
+		IF EnclaveExperimentTime_msCounter >= 100 THEN
+			EnclaveExperimentTime_Counter := EnclaveExperimentTime_Counter + 1;
+			EnclaveExperimentTime_msCounter := 0;
+		END_IF
+	ELSIF EnclaveExperimentMode = 2 THEN // PartCounter Mode
+		IF FinishedParts >= WORD_TO_INT(EnclaveExperimentValue) THEN
 			MasterRunStop := FALSE;
 		END_IF
-		// TODO: Make this count SECONDS, not MILLISECONDS. We are limited to a MAX of WORD (65535) 
-		EnclaveExperimentTime_Counter := EnclaveExperimentTime_Counter + 1;
 	END_IF
 ELSE // If MasterRunStop is FALSE, then we need to clear the timer
 	EnclaveExperimentTime_Counter := 0;
