@@ -82,9 +82,11 @@ VAR
 	EStopButtonStatus AT %I*  : BOOL;
 	
 	ClearElapsedTimes         : BOOL := FALSE;
+	ClearElapsedTimesTrig     : R_TRIG;
 	
-	PartTrackerArr            : ARRAY[1..2048] OF Part;
+	PartTrackerArr            : ARRAY[1..512] OF Part;
 	UniquePartSnCounter       : CTU;
+	PartTrackerClearCTR       : INT := 0;
 	
 	Robot_1_Part_SN   		  : WORD := 0;
 	Robot_2_Part_SN   		  : WORD := 0;
@@ -99,6 +101,9 @@ VAR
 	EnclaveExperimentValue    : WORD := 0;
 	EnclaveExperimentTime_Counter : WORD := 0;
 	EnclaveExperimentTime_msCounter : WORD := 0;
+	
+	PartTrackerExportData     : Part;
+	CurrentExportPartSN       : WORD;
 	
 END_VAR]]></Declaration>
     <Implementation>
@@ -227,6 +232,8 @@ GVL.mb_Output_Registers[8] := INT_TO_WORD(Station_4_DelayCounter);
 EnclaveExperimentMode      := GVL.mb_Output_Registers[9];
 EnclaveExperimentValue     := GVL.mb_Output_Registers[10];
 
+CurrentExportPartSN        := GVL.mb_Output_Registers[11];
+
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS OUT REGISTERS                                                           //
 // ====================                                                           //
@@ -250,6 +257,18 @@ GVL.mb_Input_Registers[5] := Station_3_Part_SN;
 GVL.mb_Input_Registers[6] := Station_4_Part_SN;
 GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 
+GVL.mb_Input_Registers[10] := PartTrackerExportData.sn;
+GVL.mb_Input_Registers[11] := PartTrackerExportData.sta1_del;
+GVL.mb_Input_Registers[12] := PartTrackerExportData.sta2_del;
+GVL.mb_Input_Registers[13] := PartTrackerExportData.sta3_del;
+GVL.mb_Input_Registers[14] := PartTrackerExportData.sta4_del;
+GVL.mb_Input_Registers[15] := PartTrackerExportData.sta6_del;
+GVL.mb_Input_Registers[16] := PartTrackerExportData.sta1_to_sta2_del;
+GVL.mb_Input_Registers[17] := PartTrackerExportData.sta2_to_sta3_del;
+GVL.mb_Input_Registers[18] := PartTrackerExportData.sta3_to_sta4_del;
+GVL.mb_Input_Registers[19] := PartTrackerExportData.sta6_to_sta1_del;
+GVL.mb_Input_Registers[20] := PartTrackerExportData.inspection;
+
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION RESIDENCE COUNTERS                                                     //
 // ==========================                                                     //
@@ -269,50 +288,67 @@ GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 //           we want the HMI to display the last residence time until the next    //
 //           part is placed in the station.                                       //
 ////////////////////////////////////////////////////////////////////////////////////
-IF Station_1_RisingTrig.Q OR ClearElapsedTimes THEN
+IF Station_1_RisingTrig.Q THEN
 	Station_1_DelayCounter := 0;
 ELSIF station_1_sensor AND MasterRunStop THEN
 	Station_1_DelayCounter := Station_1_DelayCounter + 1;
 END_IF
 
-IF Station_2_RisingTrig.Q OR ClearElapsedTimes THEN
+IF Station_2_RisingTrig.Q THEN
 	Station_2_DelayCounter := 0;
 ELSIF station_2_sensor AND MasterRunStop THEN
 	Station_2_DelayCounter := Station_2_DelayCounter + 1;
 END_IF
 
-IF Station_3_RisingTrig.Q OR ClearElapsedTimes THEN
+IF Station_3_RisingTrig.Q THEN
 	Station_3_DelayCounter := 0;
 ELSIF station_3_sensor AND MasterRunStop THEN
 	Station_3_DelayCounter := Station_3_DelayCounter + 1;
 END_IF
 
-IF Station_4_RisingTrig.Q OR ClearElapsedTimes THEN
+IF Station_4_RisingTrig.Q THEN
 	Station_4_DelayCounter := 0;
 ELSIF station_4_sensor AND MasterRunStop THEN
 	Station_4_DelayCounter := Station_4_DelayCounter + 1;
 END_IF
 
-IF Station_6_RisingTrig.Q OR ClearElapsedTimes THEN
+IF Station_6_RisingTrig.Q THEN
 	Station_6_DelayCounter := 0;
 ELSIF station_6_sensor AND MasterRunStop THEN
 	Station_6_DelayCounter := Station_6_DelayCounter + 1;
 END_IF
 
-IF (Robot_1_Part_SN = 0 OR ClearElapsedTimes) THEN
+IF Robot_1_Part_SN = 0 THEN
 	Robot_1_DelayCounter := 0;
-ELSE
+ELSIF MasterRunStop THEN
 	Robot_1_DelayCounter := Robot_1_DelayCounter + 1;
 END_IF
-IF Robot_1_to_2_Part_SN = 0 OR ClearElapsedTimes THEN
+IF Robot_1_to_2_Part_SN = 0 THEN
 	Robot_1_to_2_DelayCounter := 0;
-ELSE
+ELSIF MasterRunStop THEN
 	Robot_1_to_2_DelayCounter := Robot_1_to_2_DelayCounter + 1;
 END_IF
-IF Robot_2_Part_SN = 0 OR ClearElapsedTimes THEN
+IF Robot_2_Part_SN = 0 THEN
 	Robot_2_DelayCounter := 0;
-ELSE
+ELSIF MasterRunStop THEN
 	Robot_2_DelayCounter := Robot_2_DelayCounter + 1;
+END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// CLEAR THE PART TRACKER TIMERS                                                  //
+// =============================                                                  //
+// Description:                                                                   //
+//     Clears the part station timers.                                            //
+////////////////////////////////////////////////////////////////////////////////////
+IF ClearElapsedTimesTrig.Q THEN
+	Station_1_DelayCounter := 0;
+	Station_2_DelayCounter := 0;
+	Station_3_DelayCounter := 0;
+	Station_4_DelayCounter := 0;
+	Station_6_DelayCounter := 0;
+	Robot_1_DelayCounter := 0;
+	Robot_1_to_2_DelayCounter := 0;
+	Robot_2_DelayCounter := 0;
 END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -477,17 +513,30 @@ END_IF
 //     for now each part is considered GOOD.                                      //
 //                                                                                //
 //     If the ClearElapsedTimes external variable is set, it will reset all of    //
-//     the variables to the initial condition.                                    //
-//                                                                                //
-//     TODO: Add code to clear the array when the ClearElapsedTimes == TRUE       //
+//     the variables and the array to the initial condition.                      //
 ////////////////////////////////////////////////////////////////////////////////////
-UniquePartSnCounter(PV:=2048, CU:=Station_6_RisingTrig.Q);
+UniquePartSnCounter(PV:=512, CU:=Station_6_RisingTrig.Q);
+ClearElapsedTimesTrig(CLK:=ClearElapsedTimes);
 
-IF ClearElapsedTimes THEN
+IF ClearElapsedTimesTrig.Q THEN
+	FOR PartTrackerClearCTR := 1 TO 512 DO
+		PartTrackerArr[PartTrackerClearCTR].sn := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_to_sta2_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_to_sta3_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_to_sta4_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_to_sta1_del := 0;
+		PartTrackerArr[PartTrackerClearCTR].inspection := 0;
+	END_FOR
 	Robot_1_Part_SN   := 0;
 	Robot_2_Part_SN   := 0;
 	Station_6_Part_SN := 1;
 	UniquePartSnCounter(RESET := TRUE);
+	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN;
 ELSE
 	UniquePartSnCounter(RESET := FALSE);
 END_IF
@@ -582,6 +631,43 @@ IF MasterRunStop = TRUE THEN
 ELSE // If MasterRunStop is FALSE, then we need to clear the timer
 	EnclaveExperimentTime_Counter := 0;
 END_IF
+
+
+////////////////////////////////////////////////////////////////////////////////////
+// PART TRACKER TIMES EXPORT                                                      //
+// =========================                                                      //
+// Description:                                                                   //
+//     Exports data from the PLC to the requestor. Operates over MODBUS TCP.      //
+//     The input register MODBUS value (as set by the external user) defines      //
+//     what data is currently residing in the output registers. Only one set      //
+//     of data is exported at a time.                                             //
+////////////////////////////////////////////////////////////////////////////////////
+IF CurrentExportPartSN > 0 AND CurrentExportPartSN <= 512 THEN
+	PartTrackerExportData.sn               := PartTrackerArr[CurrentExportPartSN].sn;
+	PartTrackerExportData.sta1_del         := PartTrackerArr[CurrentExportPartSN].sta1_del;
+	PartTrackerExportData.sta2_del         := PartTrackerArr[CurrentExportPartSN].sta2_del;
+	PartTrackerExportData.sta3_del         := PartTrackerArr[CurrentExportPartSN].sta3_del;
+	PartTrackerExportData.sta4_del         := PartTrackerArr[CurrentExportPartSN].sta4_del;
+	PartTrackerExportData.sta6_del         := PartTrackerArr[CurrentExportPartSN].sta6_del;
+	PartTrackerExportData.sta1_to_sta2_del := PartTrackerArr[CurrentExportPartSN].sta1_to_sta2_del;
+	PartTrackerExportData.sta2_to_sta3_del := PartTrackerArr[CurrentExportPartSN].sta2_to_sta3_del;
+	PartTrackerExportData.sta3_to_sta4_del := PartTrackerArr[CurrentExportPartSN].sta3_to_sta4_del;
+	PartTrackerExportData.sta6_to_sta1_del := PartTrackerArr[CurrentExportPartSN].sta6_to_sta1_del;
+	PartTrackerExportData.inspection       := PartTrackerArr[CurrentExportPartSN].inspection;
+ELSE
+	PartTrackerExportData.sn               := 0;
+	PartTrackerExportData.sta1_del         := 0;
+	PartTrackerExportData.sta2_del         := 0;
+	PartTrackerExportData.sta3_del         := 0;
+	PartTrackerExportData.sta4_del         := 0;
+	PartTrackerExportData.sta6_del         := 0;
+	PartTrackerExportData.sta1_to_sta2_del := 0;
+	PartTrackerExportData.sta2_to_sta3_del := 0;
+	PartTrackerExportData.sta3_to_sta4_del := 0;
+	PartTrackerExportData.sta6_to_sta1_del := 0;
+	PartTrackerExportData.inspection       := 0;
+END_IF
+
 ]]></ST>
     </Implementation>
   </POU>
