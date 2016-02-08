@@ -541,55 +541,55 @@ ELSE
 	UniquePartSnCounter(RESET := FALSE);
 END_IF
 
-IF Station_6_RisingTrig.Q THEN
+IF Station_6_RisingTrig.Q AND Station_6_Part_SN = 0 THEN
 	Station_6_Part_SN := UniquePartSnCounter.CV + 1;
 	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN; // Set the SN
 END_IF
-IF Station_6_FallingTrig.Q THEN
+IF Station_6_FallingTrig.Q AND Robot_1_Part_SN = 0 THEN
 	PartTrackerArr[Station_6_Part_SN].sta6_del := Station_6_DelayCounter;
 	Robot_1_Part_SN := Station_6_Part_SN;
 	Station_6_Part_SN := 0;
 END_IF
 
-IF Station_1_RisingTrig.Q THEN
+IF Station_1_RisingTrig.Q AND Station_1_Part_SN = 0 THEN
 	PartTrackerArr[Robot_1_Part_SN].sta6_to_sta1_del := Robot_1_DelayCounter;
 	Station_1_Part_SN := Robot_1_Part_SN;
 	Robot_1_Part_SN := 0;
 END_IF
-IF Station_1_FallingTrig.Q THEN
+IF Station_1_FallingTrig.Q AND Robot_1_Part_SN = 0 THEN
 	PartTrackerArr[Station_1_Part_SN].sta1_del := Station_1_DelayCounter;
 	Robot_1_Part_SN := Station_1_Part_SN;
 	Station_1_Part_SN := 0;
 END_IF
 
-IF Station_2_RisingTrig.Q THEN
+IF Station_2_RisingTrig.Q AND Station_2_Part_SN = 0 THEN
 	PartTrackerArr[Robot_1_Part_SN].sta1_to_sta2_del := Robot_1_DelayCounter;
 	Station_2_Part_SN := Robot_1_Part_SN;
 	Robot_1_Part_SN := 0;
 END_IF
-IF Station_2_FallingTrig.Q THEN
+IF Station_2_FallingTrig.Q AND Robot_1_to_2_Part_SN = 0 THEN
 	PartTrackerArr[Station_2_Part_SN].sta2_del := Station_2_DelayCounter;
 	Robot_1_to_2_Part_SN := Station_2_Part_SN;
 	Station_2_Part_SN := 0;
 END_IF
 
-IF Station_3_RisingTrig.Q THEN
+IF Station_3_RisingTrig.Q AND Station_3_Part_SN = 0 THEN
 	PartTrackerArr[Robot_1_to_2_Part_SN].sta2_to_sta3_del := Robot_1_to_2_DelayCounter;
 	Station_3_Part_SN := Robot_1_to_2_Part_SN;
 	Robot_1_to_2_Part_SN := 0;
 END_IF
-IF Station_3_FallingTrig.Q THEN
+IF Station_3_FallingTrig.Q AND Robot_2_Part_SN = 0 THEN
 	PartTrackerArr[Station_3_Part_SN].sta3_del := Station_3_DelayCounter;
 	Robot_2_Part_SN := Station_3_Part_SN;
 	Station_3_Part_SN := 0;
 END_IF
 
-IF Station_4_RisingTrig.Q THEN
+IF Station_4_RisingTrig.Q AND Station_4_Part_SN = 0 THEN
 	PartTrackerArr[Robot_2_Part_SN].sta3_to_sta4_del := Robot_2_DelayCounter;
 	Station_4_Part_SN := Robot_2_Part_SN;
 	Robot_2_Part_SN := 0;
 END_IF
-IF Station_4_FallingTrig.Q THEN
+IF Station_4_FallingTrig.Q AND Station_4_Part_SN = 1 THEN // Only trigger if there is a part in the station
 	PartTrackerArr[Station_4_Part_SN].sta4_del := Station_4_DelayCounter;
 	Station_4_Part_SN := 0;
 	PartTrackerArr[Station_3_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
