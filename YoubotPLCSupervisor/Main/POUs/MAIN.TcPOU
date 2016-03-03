@@ -86,7 +86,7 @@ VAR
 	
 	PartTrackerArr            : ARRAY[1..512] OF Part;
 	//UniquePartSnCounter       : CTU;
-	UniquePartSn              : WORD := 0;
+	UniquePartSn              : WORD := 1;
 	PartTrackerClearCTR       : INT := 0;
 	
 	Robot_1_Part_SN   		  : WORD := 0;
