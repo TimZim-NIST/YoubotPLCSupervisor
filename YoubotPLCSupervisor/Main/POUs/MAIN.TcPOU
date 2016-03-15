@@ -106,6 +106,9 @@ VAR
 	PartTrackerExportData     : Part;
 	CurrentExportPartSN       : WORD;
 	
+	ExperimentTime_LO         : WORD := 0;
+	ExperimentTime_HI         : WORD := 0;
+	
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
@@ -269,6 +272,24 @@ GVL.mb_Input_Registers[17] := PartTrackerExportData.sta2_to_sta3_del;
 GVL.mb_Input_Registers[18] := PartTrackerExportData.sta3_to_sta4_del;
 GVL.mb_Input_Registers[19] := PartTrackerExportData.sta6_to_sta1_del;
 GVL.mb_Input_Registers[20] := PartTrackerExportData.inspection;
+
+////////////////////////////////////////////////////////////////////////////////////
+// EXPERIMENT TIME COUNTER                                                        //
+// =======================                                                        //
+// Description:                                                                   //
+//     Keeps track of the amount of time that has ocurred since the experiment    //
+//     was started. Two words are required to reach a maximum of 497 days.        //
+//     Records time in 10 millisecond increments.                                 //
+////////////////////////////////////////////////////////////////////////////////////
+IF MasterRunStop = TRUE THEN
+	IF ExperimentTime_LO = 65535 THEN
+		ExperimentTime_HI := ExperimentTime_HI + 1;
+	END_IF
+	ExperimentTime_LO := ExperimentTime_LO + 1;
+ELSE
+	ExperimentTime_LO := 0;
+	ExperimentTime_HI := 0;
+END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION RESIDENCE COUNTERS                                                     //
