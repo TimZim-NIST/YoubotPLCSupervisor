@@ -4,15 +4,15 @@
     <Declaration><![CDATA[TYPE Part :
 STRUCT
 		sn 						: WORD := 0;
-		sta1_del 				: WORD := 0;
-		sta2_del 				: WORD := 0;
-		sta3_del 				: WORD := 0;
-		sta4_del 				: WORD := 0;
-		sta6_del 				: WORD := 0;
-		sta1_to_sta2_del 		: WORD := 0;
-		sta2_to_sta3_del 		: WORD := 0;
-		sta3_to_sta4_del 		: WORD := 0;
-		sta6_to_sta1_del 		: WORD := 0;
+		sta1_del 				: ExpTime;
+		sta2_del 				: ExpTime;
+		sta3_del 				: ExpTime;
+		sta4_del 				: ExpTime;
+		sta6_del 				: ExpTime;
+		sta1_to_sta2_del 		: ExpTime;
+		sta2_to_sta3_del 		: ExpTime;
+		sta3_to_sta4_del 		: ExpTime;
+		sta6_to_sta1_del 		: ExpTime;
 		inspection				: WORD := 0;
 END_STRUCT
 END_TYPE
