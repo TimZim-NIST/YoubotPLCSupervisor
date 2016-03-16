@@ -263,28 +263,36 @@ GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 
 // Current requested part tracker serial number
 GVL.mb_Input_Registers[10] := PartTrackerExportData.sn;
-// Lower word of part tracking times
-GVL.mb_Input_Registers[11] := PartTrackerExportData.sta1_del.LO;
-GVL.mb_Input_Registers[12] := PartTrackerExportData.sta2_del.LO;
-GVL.mb_Input_Registers[13] := PartTrackerExportData.sta3_del.LO;
-GVL.mb_Input_Registers[14] := PartTrackerExportData.sta4_del.LO;
-GVL.mb_Input_Registers[15] := PartTrackerExportData.sta6_del.LO;
-GVL.mb_Input_Registers[16] := PartTrackerExportData.sta1_to_sta2_del.LO;
-GVL.mb_Input_Registers[17] := PartTrackerExportData.sta2_to_sta3_del.LO;
-GVL.mb_Input_Registers[18] := PartTrackerExportData.sta3_to_sta4_del.LO;
-GVL.mb_Input_Registers[19] := PartTrackerExportData.sta6_to_sta1_del.LO;
-// Upper word of part tracking times 
-GVL.mb_Input_Registers[20] := PartTrackerExportData.sta1_del.HI;
-GVL.mb_Input_Registers[21] := PartTrackerExportData.sta2_del.HI;
-GVL.mb_Input_Registers[22] := PartTrackerExportData.sta3_del.HI;
-GVL.mb_Input_Registers[23] := PartTrackerExportData.sta4_del.HI;
-GVL.mb_Input_Registers[24] := PartTrackerExportData.sta6_del.HI;
-GVL.mb_Input_Registers[25] := PartTrackerExportData.sta1_to_sta2_del.HI;
-GVL.mb_Input_Registers[26] := PartTrackerExportData.sta2_to_sta3_del.HI;
-GVL.mb_Input_Registers[27] := PartTrackerExportData.sta3_to_sta4_del.HI;
-GVL.mb_Input_Registers[28] := PartTrackerExportData.sta6_to_sta1_del.HI;
 // Inspection result
-GVL.mb_Input_Registers[29] := PartTrackerExportData.inspection;
+GVL.mb_Input_Registers[11] := PartTrackerExportData.inspection;
+// Lower word of part tracking times
+GVL.mb_Input_Registers[12] := PartTrackerExportData.sta1_del.LO;
+GVL.mb_Input_Registers[21] := PartTrackerExportData.sta1_del.HI;
+GVL.mb_Input_Registers[13] := PartTrackerExportData.sta2_del.LO;
+GVL.mb_Input_Registers[22] := PartTrackerExportData.sta2_del.HI;
+GVL.mb_Input_Registers[14] := PartTrackerExportData.sta3_del.LO;
+GVL.mb_Input_Registers[23] := PartTrackerExportData.sta3_del.HI;
+GVL.mb_Input_Registers[15] := PartTrackerExportData.sta4_del.LO;
+GVL.mb_Input_Registers[24] := PartTrackerExportData.sta4_del.HI;
+GVL.mb_Input_Registers[16] := PartTrackerExportData.sta6_del.LO;
+GVL.mb_Input_Registers[25] := PartTrackerExportData.sta6_del.HI;
+GVL.mb_Input_Registers[17] := PartTrackerExportData.sta1_to_sta2_del.LO;
+GVL.mb_Input_Registers[26] := PartTrackerExportData.sta1_to_sta2_del.HI;
+GVL.mb_Input_Registers[18] := PartTrackerExportData.sta2_to_sta3_del.LO;
+GVL.mb_Input_Registers[27] := PartTrackerExportData.sta2_to_sta3_del.HI;
+GVL.mb_Input_Registers[19] := PartTrackerExportData.sta3_to_sta4_del.LO;
+GVL.mb_Input_Registers[28] := PartTrackerExportData.sta3_to_sta4_del.HI;
+GVL.mb_Input_Registers[20] := PartTrackerExportData.sta6_to_sta1_del.LO;
+GVL.mb_Input_Registers[29] := PartTrackerExportData.sta6_to_sta1_del.HI;
+// Upper word of part tracking times 
+
+
+
+
+
+
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 // EXPERIMENT TIME COUNTER                                                        //
