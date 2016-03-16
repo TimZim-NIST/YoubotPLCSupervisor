@@ -265,34 +265,27 @@ GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 GVL.mb_Input_Registers[10] := PartTrackerExportData.sn;
 // Inspection result
 GVL.mb_Input_Registers[11] := PartTrackerExportData.inspection;
-// Lower word of part tracking times
-GVL.mb_Input_Registers[12] := PartTrackerExportData.sta1_del.LO;
-GVL.mb_Input_Registers[21] := PartTrackerExportData.sta1_del.HI;
-GVL.mb_Input_Registers[13] := PartTrackerExportData.sta2_del.LO;
-GVL.mb_Input_Registers[22] := PartTrackerExportData.sta2_del.HI;
-GVL.mb_Input_Registers[14] := PartTrackerExportData.sta3_del.LO;
-GVL.mb_Input_Registers[23] := PartTrackerExportData.sta3_del.HI;
-GVL.mb_Input_Registers[15] := PartTrackerExportData.sta4_del.LO;
-GVL.mb_Input_Registers[24] := PartTrackerExportData.sta4_del.HI;
-GVL.mb_Input_Registers[16] := PartTrackerExportData.sta6_del.LO;
-GVL.mb_Input_Registers[25] := PartTrackerExportData.sta6_del.HI;
-GVL.mb_Input_Registers[17] := PartTrackerExportData.sta1_to_sta2_del.LO;
-GVL.mb_Input_Registers[26] := PartTrackerExportData.sta1_to_sta2_del.HI;
-GVL.mb_Input_Registers[18] := PartTrackerExportData.sta2_to_sta3_del.LO;
-GVL.mb_Input_Registers[27] := PartTrackerExportData.sta2_to_sta3_del.HI;
-GVL.mb_Input_Registers[19] := PartTrackerExportData.sta3_to_sta4_del.LO;
-GVL.mb_Input_Registers[28] := PartTrackerExportData.sta3_to_sta4_del.HI;
-GVL.mb_Input_Registers[20] := PartTrackerExportData.sta6_to_sta1_del.LO;
-GVL.mb_Input_Registers[29] := PartTrackerExportData.sta6_to_sta1_del.HI;
-// Upper word of part tracking times 
-
-
-
-
-
-
-
-
+// Arrival and departure times
+GVL.mb_Input_Registers[12] := PartTrackerExportData.sta1_arr.LO;
+GVL.mb_Input_Registers[13] := PartTrackerExportData.sta1_arr.HI;
+GVL.mb_Input_Registers[14] := PartTrackerExportData.sta1_dep.LO;
+GVL.mb_Input_Registers[15] := PartTrackerExportData.sta1_dep.HI;
+GVL.mb_Input_Registers[16] := PartTrackerExportData.sta2_arr.LO;
+GVL.mb_Input_Registers[17] := PartTrackerExportData.sta2_arr.HI;
+GVL.mb_Input_Registers[18] := PartTrackerExportData.sta2_dep.LO;
+GVL.mb_Input_Registers[19] := PartTrackerExportData.sta2_dep.HI;
+GVL.mb_Input_Registers[20] := PartTrackerExportData.sta3_arr.LO;
+GVL.mb_Input_Registers[21] := PartTrackerExportData.sta3_arr.HI;
+GVL.mb_Input_Registers[22] := PartTrackerExportData.sta3_dep.LO;
+GVL.mb_Input_Registers[23] := PartTrackerExportData.sta3_dep.HI;
+GVL.mb_Input_Registers[24] := PartTrackerExportData.sta4_arr.LO;
+GVL.mb_Input_Registers[25] := PartTrackerExportData.sta4_arr.HI;
+GVL.mb_Input_Registers[26] := PartTrackerExportData.sta4_dep.LO;
+GVL.mb_Input_Registers[27] := PartTrackerExportData.sta4_dep.HI;
+GVL.mb_Input_Registers[28] := PartTrackerExportData.sta6_arr.LO;
+GVL.mb_Input_Registers[29] := PartTrackerExportData.sta6_arr.HI;
+GVL.mb_Input_Registers[30] := PartTrackerExportData.sta6_dep.LO;
+GVL.mb_Input_Registers[31] := PartTrackerExportData.sta6_dep.HI;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // EXPERIMENT TIME COUNTER                                                        //
@@ -570,25 +563,28 @@ ClearElapsedTimesTrig(CLK:=ClearElapsedTimes);
 IF ClearElapsedTimesTrig.Q THEN
 	FOR PartTrackerClearCTR := 1 TO 512 DO
 		PartTrackerArr[PartTrackerClearCTR].sn := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta4_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta4_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_to_sta2_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_to_sta2_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_to_sta3_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_to_sta3_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_to_sta4_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_to_sta4_del.HI := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_to_sta1_del.LO := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_to_sta1_del.HI := 0;
 		PartTrackerArr[PartTrackerClearCTR].inspection := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_arr.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_arr.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_dep.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_dep.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_arr.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_arr.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_dep.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_dep.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_arr.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_arr.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_dep.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_dep.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_arr.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_arr.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_dep.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_dep.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_arr.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_arr.HI := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_dep.LO := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_dep.HI := 0;
+		
 	END_FOR
 	Robot_1_Part_SN   := 0;
 	Robot_2_Part_SN   := 0;
@@ -607,68 +603,70 @@ IF Station_6_RisingTrig.Q AND Station_6_Part_SN = 0 THEN
 	UniquePartSn := UniquePartSn + 1;
 	Station_6_Part_SN := UniquePartSn;
 	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN; // Set the SN
+	PartTrackerArr[Station_6_Part_SN].sta6_arr.LO := ExperimentTime_LO;
+	PartTrackerArr[Station_6_Part_SN].sta6_arr.HI := ExperimentTime_HI;
 END_IF
 IF Station_6_FallingTrig.Q AND Robot_1_Part_SN = 0 AND Station_1_Part_SN = 0 THEN
-	PartTrackerArr[Station_6_Part_SN].sta6_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Station_6_Part_SN].sta6_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Station_6_Part_SN].sta6_dep.LO := ExperimentTime_LO;
+	PartTrackerArr[Station_6_Part_SN].sta6_dep.HI := ExperimentTime_HI;
 	Robot_1_Part_SN := Station_6_Part_SN;
 	Station_6_Part_SN := 0;
 END_IF
 
 // STATION 1 LOGIC
 IF Station_1_RisingTrig.Q AND Station_1_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_Part_SN].sta6_to_sta1_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Robot_1_Part_SN].sta6_to_sta1_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Robot_1_Part_SN].sta1_arr.LO := ExperimentTime_LO;
+	PartTrackerArr[Robot_1_Part_SN].sta1_arr.HI := ExperimentTime_HI;
 	Station_1_Part_SN := Robot_1_Part_SN;
 	Robot_1_Part_SN := 0;
 END_IF
 IF Station_1_FallingTrig.Q AND Robot_1_Part_SN = 0 THEN
-	PartTrackerArr[Station_1_Part_SN].sta1_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Station_1_Part_SN].sta1_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Station_1_Part_SN].sta1_dep.LO := ExperimentTime_LO;
+	PartTrackerArr[Station_1_Part_SN].sta1_dep.HI := ExperimentTime_HI;
 	Robot_1_Part_SN := Station_1_Part_SN;
 	Station_1_Part_SN := 0;
 END_IF
 
 // STATION 2 LOGIC
 IF Station_2_RisingTrig.Q AND Station_2_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_Part_SN].sta1_to_sta2_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Robot_1_Part_SN].sta1_to_sta2_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Robot_1_Part_SN].sta2_arr.LO := ExperimentTime_LO;
+	PartTrackerArr[Robot_1_Part_SN].sta2_arr.HI := ExperimentTime_HI;
 	Station_2_Part_SN := Robot_1_Part_SN;
 	Robot_1_Part_SN := 0;
 END_IF
 IF Station_2_FallingTrig.Q AND Robot_1_to_2_Part_SN = 0 THEN
-	PartTrackerArr[Station_2_Part_SN].sta2_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Station_2_Part_SN].sta2_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Station_2_Part_SN].sta2_dep.LO := ExperimentTime_LO;
+	PartTrackerArr[Station_2_Part_SN].sta2_dep.HI := ExperimentTime_HI;
 	Robot_1_to_2_Part_SN := Station_2_Part_SN;
 	Station_2_Part_SN := 0;
 END_IF
 
 // STATION 3 LOGIC
 IF Station_3_RisingTrig.Q AND Station_3_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_to_2_Part_SN].sta2_to_sta3_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Robot_1_to_2_Part_SN].sta2_to_sta3_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Robot_1_to_2_Part_SN].sta3_arr.LO := ExperimentTime_LO;
+	PartTrackerArr[Robot_1_to_2_Part_SN].sta3_arr.HI := ExperimentTime_HI;
 	Station_3_Part_SN := Robot_1_to_2_Part_SN;
 	Robot_1_to_2_Part_SN := 0;
 END_IF
 IF Station_3_FallingTrig.Q AND Robot_2_Part_SN = 0 THEN
-	PartTrackerArr[Station_3_Part_SN].sta3_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Station_3_Part_SN].sta3_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Station_3_Part_SN].sta3_dep.LO := ExperimentTime_LO;
+	PartTrackerArr[Station_3_Part_SN].sta3_dep.HI := ExperimentTime_HI;
 	Robot_2_Part_SN := Station_3_Part_SN;
 	Station_3_Part_SN := 0;
 END_IF
 
 // STATION 4 LOGIC
 IF Station_4_RisingTrig.Q AND Station_4_Part_SN = 0 THEN
-	PartTrackerArr[Robot_2_Part_SN].sta3_to_sta4_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Robot_2_Part_SN].sta3_to_sta4_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Robot_2_Part_SN].sta4_arr.LO := ExperimentTime_LO;
+	PartTrackerArr[Robot_2_Part_SN].sta4_arr.HI := ExperimentTime_HI;
 	Station_4_Part_SN := Robot_2_Part_SN;
 	Robot_2_Part_SN := 0;
 END_IF
 IF Station_4_FallingTrig.Q AND Station_4_Part_SN > 0 THEN // Only trigger if there is a part in the station
-	PartTrackerArr[Station_4_Part_SN].sta4_del.LO := ExperimentTime_LO;
-	PartTrackerArr[Station_4_Part_SN].sta4_del.HI := ExperimentTime_HI;
+	PartTrackerArr[Station_4_Part_SN].sta4_dep.LO := ExperimentTime_LO;
+	PartTrackerArr[Station_4_Part_SN].sta4_dep.HI := ExperimentTime_HI;
 	Station_4_Part_SN := 0;
-	PartTrackerArr[Station_3_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
+	PartTrackerArr[Station_4_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
 	FinishedParts := FinishedParts + 1;
 END_IF
 
@@ -720,46 +718,51 @@ END_IF
 ////////////////////////////////////////////////////////////////////////////////////
 IF CurrentExportPartSN > 0 AND CurrentExportPartSN <= 512 THEN
 	PartTrackerExportData.sn               := PartTrackerArr[CurrentExportPartSN].sn;
-	PartTrackerExportData.sta1_del.LO         := PartTrackerArr[CurrentExportPartSN].sta1_del.LO;
-	PartTrackerExportData.sta2_del.LO         := PartTrackerArr[CurrentExportPartSN].sta2_del.LO;
-	PartTrackerExportData.sta3_del.LO         := PartTrackerArr[CurrentExportPartSN].sta3_del.LO;
-	PartTrackerExportData.sta4_del.LO         := PartTrackerArr[CurrentExportPartSN].sta4_del.LO;
-	PartTrackerExportData.sta6_del.LO         := PartTrackerArr[CurrentExportPartSN].sta6_del.LO;
-	PartTrackerExportData.sta1_to_sta2_del.LO := PartTrackerArr[CurrentExportPartSN].sta1_to_sta2_del.LO;
-	PartTrackerExportData.sta2_to_sta3_del.LO := PartTrackerArr[CurrentExportPartSN].sta2_to_sta3_del.LO;
-	PartTrackerExportData.sta3_to_sta4_del.LO := PartTrackerArr[CurrentExportPartSN].sta3_to_sta4_del.LO;
-	PartTrackerExportData.sta6_to_sta1_del.LO := PartTrackerArr[CurrentExportPartSN].sta6_to_sta1_del.LO;
-	PartTrackerExportData.sta1_del.HI         := PartTrackerArr[CurrentExportPartSN].sta1_del.HI;
-	PartTrackerExportData.sta2_del.HI         := PartTrackerArr[CurrentExportPartSN].sta2_del.HI;
-	PartTrackerExportData.sta3_del.HI         := PartTrackerArr[CurrentExportPartSN].sta3_del.HI;
-	PartTrackerExportData.sta4_del.HI         := PartTrackerArr[CurrentExportPartSN].sta4_del.HI;
-	PartTrackerExportData.sta6_del.HI         := PartTrackerArr[CurrentExportPartSN].sta6_del.HI;
-	PartTrackerExportData.sta1_to_sta2_del.HI := PartTrackerArr[CurrentExportPartSN].sta1_to_sta2_del.HI;
-	PartTrackerExportData.sta2_to_sta3_del.HI := PartTrackerArr[CurrentExportPartSN].sta2_to_sta3_del.HI;
-	PartTrackerExportData.sta3_to_sta4_del.HI := PartTrackerArr[CurrentExportPartSN].sta3_to_sta4_del.HI;
-	PartTrackerExportData.sta6_to_sta1_del.HI := PartTrackerArr[CurrentExportPartSN].sta6_to_sta1_del.HI;
 	PartTrackerExportData.inspection       := PartTrackerArr[CurrentExportPartSN].inspection;
+	PartTrackerExportData.sta1_arr.LO      := PartTrackerArr[CurrentExportPartSN].sta1_arr.LO;
+	PartTrackerExportData.sta1_arr.HI      := PartTrackerArr[CurrentExportPartSN].sta1_arr.HI;
+	PartTrackerExportData.sta1_dep.LO      := PartTrackerArr[CurrentExportPartSN].sta1_dep.LO;
+	PartTrackerExportData.sta1_dep.HI      := PartTrackerArr[CurrentExportPartSN].sta1_dep.HI;
+	PartTrackerExportData.sta2_arr.LO      := PartTrackerArr[CurrentExportPartSN].sta2_arr.LO;
+	PartTrackerExportData.sta2_arr.HI      := PartTrackerArr[CurrentExportPartSN].sta2_arr.HI;
+	PartTrackerExportData.sta2_dep.LO      := PartTrackerArr[CurrentExportPartSN].sta2_dep.LO;
+	PartTrackerExportData.sta2_dep.HI      := PartTrackerArr[CurrentExportPartSN].sta2_dep.HI;
+	PartTrackerExportData.sta3_arr.LO      := PartTrackerArr[CurrentExportPartSN].sta3_arr.LO;
+	PartTrackerExportData.sta3_arr.HI      := PartTrackerArr[CurrentExportPartSN].sta3_arr.HI;
+	PartTrackerExportData.sta3_dep.LO      := PartTrackerArr[CurrentExportPartSN].sta3_dep.LO;
+	PartTrackerExportData.sta3_dep.HI      := PartTrackerArr[CurrentExportPartSN].sta3_dep.HI;
+	PartTrackerExportData.sta4_arr.LO      := PartTrackerArr[CurrentExportPartSN].sta4_arr.LO;
+	PartTrackerExportData.sta4_arr.HI      := PartTrackerArr[CurrentExportPartSN].sta4_arr.HI;
+	PartTrackerExportData.sta4_dep.LO      := PartTrackerArr[CurrentExportPartSN].sta4_dep.LO;
+	PartTrackerExportData.sta4_dep.HI      := PartTrackerArr[CurrentExportPartSN].sta4_dep.HI;
+	PartTrackerExportData.sta6_arr.LO      := PartTrackerArr[CurrentExportPartSN].sta6_arr.LO;
+	PartTrackerExportData.sta6_arr.HI      := PartTrackerArr[CurrentExportPartSN].sta6_arr.HI;
+	PartTrackerExportData.sta6_dep.LO      := PartTrackerArr[CurrentExportPartSN].sta6_dep.LO;
+	PartTrackerExportData.sta6_dep.HI      := PartTrackerArr[CurrentExportPartSN].sta6_dep.HI;
+
 ELSE
 	PartTrackerExportData.sn               := 0;
-	PartTrackerExportData.sta1_del.LO         := 0;
-	PartTrackerExportData.sta2_del.LO         := 0;
-	PartTrackerExportData.sta3_del.LO         := 0;
-	PartTrackerExportData.sta4_del.LO         := 0;
-	PartTrackerExportData.sta6_del.LO         := 0;
-	PartTrackerExportData.sta1_to_sta2_del.LO := 0;
-	PartTrackerExportData.sta2_to_sta3_del.LO := 0;
-	PartTrackerExportData.sta3_to_sta4_del.LO := 0;
-	PartTrackerExportData.sta6_to_sta1_del.LO := 0;
-	PartTrackerExportData.sta1_del.HI         := 0;
-	PartTrackerExportData.sta2_del.HI         := 0;
-	PartTrackerExportData.sta3_del.HI         := 0;
-	PartTrackerExportData.sta4_del.HI         := 0;
-	PartTrackerExportData.sta6_del.HI         := 0;
-	PartTrackerExportData.sta1_to_sta2_del.HI := 0;
-	PartTrackerExportData.sta2_to_sta3_del.HI := 0;
-	PartTrackerExportData.sta3_to_sta4_del.HI := 0;
-	PartTrackerExportData.sta6_to_sta1_del.HI := 0;
 	PartTrackerExportData.inspection       := 0;
+	PartTrackerExportData.sta1_arr.LO      := 0;
+	PartTrackerExportData.sta1_arr.HI      := 0;
+	PartTrackerExportData.sta1_dep.LO      := 0;
+	PartTrackerExportData.sta1_dep.HI      := 0;
+	PartTrackerExportData.sta2_arr.LO      := 0;
+	PartTrackerExportData.sta2_arr.HI      := 0;
+	PartTrackerExportData.sta2_dep.LO      := 0;
+	PartTrackerExportData.sta2_dep.HI      := 0;
+	PartTrackerExportData.sta3_arr.LO      := 0;
+	PartTrackerExportData.sta3_arr.HI      := 0;
+	PartTrackerExportData.sta3_dep.LO      := 0;
+	PartTrackerExportData.sta3_dep.HI      := 0;
+	PartTrackerExportData.sta4_arr.LO      := 0;
+	PartTrackerExportData.sta4_arr.HI      := 0;
+	PartTrackerExportData.sta4_dep.LO      := 0;
+	PartTrackerExportData.sta4_dep.HI      := 0;
+	PartTrackerExportData.sta6_arr.LO      := 0;
+	PartTrackerExportData.sta6_arr.HI      := 0;
+	PartTrackerExportData.sta6_dep.LO      := 0;
+	PartTrackerExportData.sta6_dep.HI      := 0;
 END_IF
 
 ]]></ST>

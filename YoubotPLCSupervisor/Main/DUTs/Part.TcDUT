@@ -4,16 +4,17 @@
     <Declaration><![CDATA[TYPE Part :
 STRUCT
 		sn 						: WORD := 0;
-		sta1_del 				: ExpTime;
-		sta2_del 				: ExpTime;
-		sta3_del 				: ExpTime;
-		sta4_del 				: ExpTime;
-		sta6_del 				: ExpTime;
-		sta1_to_sta2_del 		: ExpTime;
-		sta2_to_sta3_del 		: ExpTime;
-		sta3_to_sta4_del 		: ExpTime;
-		sta6_to_sta1_del 		: ExpTime;
 		inspection				: WORD := 0;
+		sta1_arr 				: ExpTime;
+		sta1_dep 				: ExpTime;
+		sta2_arr 				: ExpTime;
+		sta2_dep 				: ExpTime;
+		sta3_arr 				: ExpTime;
+		sta3_dep				: ExpTime;
+		sta4_arr 				: ExpTime;
+		sta4_dep				: ExpTime;
+		sta6_arr 				: ExpTime;
+		sta6_dep                : ExpTime;
 END_STRUCT
 END_TYPE
 ]]></Declaration>
