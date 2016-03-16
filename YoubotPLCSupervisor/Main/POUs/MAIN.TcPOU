@@ -595,7 +595,7 @@ IF ClearElapsedTimesTrig.Q THEN
 	Station_4_Part_SN := 0;
 	Station_6_Part_SN := 1;
 	UniquePartSn := 1;
-	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN;
+	PartTrackerArr[1].sn := Station_6_Part_SN;
 END_IF
 
 // STATION 6 LOGIC
@@ -665,8 +665,8 @@ END_IF
 IF Station_4_FallingTrig.Q AND Station_4_Part_SN > 0 THEN // Only trigger if there is a part in the station
 	PartTrackerArr[Station_4_Part_SN].sta4_dep.LO := ExperimentTime_LO;
 	PartTrackerArr[Station_4_Part_SN].sta4_dep.HI := ExperimentTime_HI;
-	Station_4_Part_SN := 0;
 	PartTrackerArr[Station_4_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
+	Station_4_Part_SN := 0;
 	FinishedParts := FinishedParts + 1;
 END_IF
 
