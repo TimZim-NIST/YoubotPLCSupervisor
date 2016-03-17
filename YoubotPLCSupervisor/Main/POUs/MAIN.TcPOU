@@ -108,6 +108,15 @@ VAR
 	ExperimentTime_LO         : WORD := 0;
 	ExperimentTime_HI         : WORD := 0;
 	ExperimentStartTrig       : R_TRIG;
+	ExperimentStartTime_0     : WORD := 0;
+	ExperimentStartTime_1     : WORD := 0;
+	ExperimentStartTime_2     : WORD := 0;
+	ExperimentStartTime_3     : WORD := 0;
+
+	WindowsTime              : NT_GetTime;
+	WindowsTimeStruct        : TIMESTRUCT;
+	WindowsFILETIME          : T_FILETIME;
+	GotNewTime               : BOOL := FALSE;
 	
 END_VAR]]></Declaration>
     <Implementation>
@@ -238,6 +247,12 @@ EnclaveExperimentValue     := GVL.mb_Output_Registers[10];
 
 CurrentExportPartSN        := GVL.mb_Output_Registers[11];
 
+// Experiment Start Time
+GVL.mb_Output_Registers[12] := ExperimentStartTime_0;
+GVL.mb_Output_Registers[13] := ExperimentStartTime_1;
+GVL.mb_Output_Registers[14] := ExperimentStartTime_2;
+GVL.mb_Output_Registers[15] := ExperimentStartTime_3;
+
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS OUT REGISTERS                                                           //
 // ====================                                                           //
@@ -260,7 +275,6 @@ GVL.mb_Input_Registers[4] := Station_2_Part_SN;
 GVL.mb_Input_Registers[5] := Station_3_Part_SN;
 GVL.mb_Input_Registers[6] := Station_4_Part_SN;
 GVL.mb_Input_Registers[7] := Station_6_Part_SN;
-
 // Current requested part tracker serial number
 GVL.mb_Input_Registers[10] := PartTrackerExportData.sn;
 // Inspection result
@@ -298,9 +312,10 @@ GVL.mb_Input_Registers[31] := PartTrackerExportData.sta6_dep.HI;
 //     table. It is easier to handle it in HI and LO, and convert offline.        //
 //     The trigger is used to force the logic to ignore the first iteration after //
 //     the MasterRunStop is enabled, as this would permaturely increase the       //       
-//     counter.                                                                   //
+//     counter. This code also captures the PLC system time when the experiment   //
+//     is started.                                                                //
 ////////////////////////////////////////////////////////////////////////////////////
-ExperimentStartTrig(CLK:=MasterRunStop);
+WindowsTime(TIMESTR=>WindowsTimeStruct);
 IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
 	IF ExperimentTime_LO = 65535 THEN
 		ExperimentTime_HI := ExperimentTime_HI + 1;
@@ -310,6 +325,15 @@ ELSE
 	ExperimentTime_LO := 0;
 	ExperimentTime_HI := 0;
 END_IF
+
+IF GotNewTime THEN
+	ExperimentStartTime_0 := UDINT_TO_WORD(WindowsFILETIME.dwLowDateTime);
+	ExperimentStartTime_1 := UDINT_TO_WORD(SHR(WindowsFILETIME.dwLowDateTime AND 16#FFFF0000,16));
+	ExperimentStartTime_2 := UDINT_TO_WORD(WindowsFILETIME.dwHighDateTime);
+	ExperimentStartTime_3 := UDINT_TO_WORD(SHR(WindowsFILETIME.dwHighDateTime AND 16#FFFF0000,16));
+	GotNewTime := FALSE;
+END_IF
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION RESIDENCE COUNTERS                                                     //
@@ -438,9 +462,17 @@ END_IF
 StartButtonTimer(IN:=green_button, PT:=T#2.0S);
 IF NOT black_switch = TRUE THEN
 	IF NOT MasterRunStop AND green_button AND StartButtonTimer.Q THEN
-		MasterRunStop := TRUE;
+		// LOG THE SYSTEM START TIME BEFORE CONTINUING
+		WindowsTime(START:=TRUE);
+		IF NOT WindowsTime.BUSY THEN
+			WindowsTime(START:=FALSE);
+			WindowsFILETIME := SYSTEMTIME_TO_FILETIME(systemTime:=WindowsTimeStruct);
+			MasterRunStop := TRUE;
+			GotNewTime := TRUE;
+		END_IF
 	END_IF
 ELSE
+	WindowsTime(START:=FALSE);
 	MasterRunStop := FALSE;
 END_IF
 
@@ -739,7 +771,6 @@ IF CurrentExportPartSN > 0 AND CurrentExportPartSN <= 512 THEN
 	PartTrackerExportData.sta6_arr.HI      := PartTrackerArr[CurrentExportPartSN].sta6_arr.HI;
 	PartTrackerExportData.sta6_dep.LO      := PartTrackerArr[CurrentExportPartSN].sta6_dep.LO;
 	PartTrackerExportData.sta6_dep.HI      := PartTrackerArr[CurrentExportPartSN].sta6_dep.HI;
-
 ELSE
 	PartTrackerExportData.sn               := 0;
 	PartTrackerExportData.inspection       := 0;
