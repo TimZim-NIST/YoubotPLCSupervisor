@@ -66,6 +66,11 @@ VAR
 	Station_3_ProcessTime : WORD := 4;
 	Station_4_ProcessTime : WORD := 5;
 	
+	Station_1_Counters : StationCounters;
+	Station_2_Counters : StationCounters;
+	Station_3_Counters : StationCounters;
+	Station_4_Counters : StationCounters;
+	
 	Indicator_Flash_Timer : TON;
 	EStop_Flash_Timer     : TON;
 	
@@ -795,6 +800,70 @@ ELSE
 	PartTrackerExportData.sta6_dep.LO      := 0;
 	PartTrackerExportData.sta6_dep.HI      := 0;
 END_IF
+
+//////////////////////////////////////////////
+// Code for tracking station specific times //
+// e.g. idle, processing, and waiting       //
+//////////////////////////////////////////////
+IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
+	///////////////
+	// Station 1 //
+	///////////////
+	IF station_1_sensor = TRUE AND Station_1_Timer.Q = TRUE THEN
+		Station_1_Counters.Waiting_Counter := Station_1_Counters.Waiting_Counter + 1;
+	ELSIF station_1_sensor = TRUE AND Station_1_Timer.Q = FALSE THEN 
+		Station_1_Counters.Process_Counter := Station_1_Counters.Process_Counter + 1;
+	ELSIF station_1_sensor = FALSE THEN
+		Station_1_Counters.Idle_Counter := Station_1_Counters.Idle_Counter + 1;
+	END_IF
+	///////////////
+	// Station 2 //
+	///////////////
+	IF station_2_sensor = TRUE AND Station_2_Timer.Q = TRUE THEN
+		Station_2_Counters.Waiting_Counter := Station_2_Counters.Waiting_Counter + 1;
+	ELSIF station_2_sensor = TRUE AND Station_2_Timer.Q = FALSE THEN 
+		Station_2_Counters.Process_Counter := Station_2_Counters.Process_Counter + 1;
+	ELSIF station_2_sensor = FALSE THEN
+		Station_2_Counters.Idle_Counter := Station_2_Counters.Idle_Counter + 1;
+	END_IF
+	///////////////
+	// Station 3 //
+	///////////////
+	IF station_3_sensor = TRUE AND Station_3_Timer.Q = TRUE THEN
+		Station_3_Counters.Waiting_Counter := Station_3_Counters.Waiting_Counter + 1;
+	ELSIF station_3_sensor = TRUE AND Station_3_Timer.Q = FALSE THEN 
+		Station_3_Counters.Process_Counter := Station_3_Counters.Process_Counter + 1;
+	ELSIF station_3_sensor = FALSE THEN
+		Station_3_Counters.Idle_Counter := Station_3_Counters.Idle_Counter + 1;
+	END_IF
+	///////////////
+	// Station 4 //
+	///////////////
+	IF station_4_sensor = TRUE AND Station_4_Timer.Q = TRUE THEN
+		Station_4_Counters.Waiting_Counter := Station_4_Counters.Waiting_Counter + 1;
+	ELSIF station_4_sensor = TRUE AND Station_4_Timer.Q = FALSE THEN 
+		Station_4_Counters.Process_Counter := Station_4_Counters.Process_Counter + 1;
+	ELSIF station_4_sensor = FALSE THEN
+		Station_4_Counters.Idle_Counter := Station_4_Counters.Idle_Counter + 1;
+	END_IF
+END_IF
+
+IF ClearElapsedTimesTrig.Q THEN
+	Station_1_Counters.Idle_Counter := 0;
+	Station_1_Counters.Process_Counter := 0;
+	Station_1_Counters.Waiting_Counter := 0;
+	Station_2_Counters.Idle_Counter := 0;
+	Station_2_Counters.Process_Counter := 0;
+	Station_2_Counters.Waiting_Counter := 0;
+	Station_3_Counters.Idle_Counter := 0;
+	Station_3_Counters.Process_Counter := 0;
+	Station_3_Counters.Waiting_Counter := 0;
+	Station_4_Counters.Idle_Counter := 0;
+	Station_4_Counters.Process_Counter := 0;
+	Station_4_Counters.Waiting_Counter := 0;
+END_IF
+
+
 
 ]]></ST>
     </Implementation>
