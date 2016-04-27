@@ -3,18 +3,18 @@
   <DUT Name="Part" Id="{69cfe8f7-6820-4fe4-b464-8d8f862b3056}">
     <Declaration><![CDATA[TYPE Part :
 STRUCT
-		sn 						: WORD := 0;
-		inspection				: WORD := 0;
-		sta1_arr 				: ExpTime;
-		sta1_dep 				: ExpTime;
-		sta2_arr 				: ExpTime;
-		sta2_dep 				: ExpTime;
-		sta3_arr 				: ExpTime;
-		sta3_dep				: ExpTime;
-		sta4_arr 				: ExpTime;
-		sta4_dep				: ExpTime;
-		sta6_arr 				: ExpTime;
-		sta6_dep                : ExpTime;
+		sn 						: UDINT := 0;
+		inspection				: UDINT := 0;
+		sta1_arr 				: UDINT := 0;
+		sta1_dep 				: UDINT := 0;
+		sta2_arr 				: UDINT := 0;
+		sta2_dep 				: UDINT := 0;
+		sta3_arr 				: UDINT := 0;
+		sta3_dep				: UDINT := 0;
+		sta4_arr 				: UDINT := 0;
+		sta4_dep				: UDINT := 0;
+		sta6_arr 				: UDINT := 0;
+		sta6_dep                : UDINT := 0;
 END_STRUCT
 END_TYPE
 ]]></Declaration>
