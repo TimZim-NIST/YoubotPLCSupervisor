@@ -91,7 +91,7 @@ VAR
 	
 	PartTrackerArr            : ARRAY[1..512] OF Part;
 	UniquePartSn              : WORD := 1;
-	PartTrackerClearCTR       : INT := 0;
+	PartTrackerClearCTR       : UINT := 0;
 	
 	Robot_1_Part_SN   		  : WORD := 0;
 	Robot_2_Part_SN   		  : WORD := 0;
@@ -122,9 +122,42 @@ VAR
 	WindowsFILETIME          : T_FILETIME;
 	GotNewTime               : BOOL := FALSE;
 	
+	TC_CpuUsage1       : TC_CpuUsage;
+    TC_CpuUsage_Busy   : BOOL;
+    TC_CpuUsage_Err    : BOOL;
+    TC_CpuUsage_ErrId  : UDINT;
+    CpuUsage           : UDINT;
+	
+	TC_Profiler1       : FB_CxProfiler;
+	ExecutionTime      : ST_CX_ProfilerStruct;
+	
+	Perf_TaskTime      : ARRAY[1..16383] OF INT;
+	Perf_CPUUsage      : ARRAY[1..16383] OF INT;
+	
+	Perf_LogTime       : UDINT := 0;
+	Perf_ClearCTR      : UINT := 0;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[
+      <ST><![CDATA[////////////////////////////////////////////////////////////////////////////////////
+// PERFORMANCE LOGGERS                                                            //
+// ===================                                                            //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+TC_Profiler1(stData=>ExecutionTime, bReset:=yellow_button);
+// Record these values every 1 second after execution start (10ms rate * 100)
+IF ExperimentTime MOD 100 = 0 THEN
+	// Store the previous values before we start
+	IF ExperimentTime > 0 THEN
+		Perf_LogTime := ExperimentTime / 100;
+		Perf_CPUUsage[Perf_LogTime] := UDINT_TO_INT(CpuUsage);
+		Perf_TaskTime[Perf_LogTime] := UDINT_TO_INT(ExecutionTime.dwLastExecTime);
+	END_IF
+	// Start a new sample
+	TC_CpuUsage1(START:=TRUE, BUSY=>TC_CpuUsage_Busy, ERR=>TC_CpuUsage_Err, ERRID=>TC_CpuUsage_ErrId, USAGE=>CpuUsage);
+	TC_Profiler1(bStart := TRUE);
+END_IF
+
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION PROCESS TIMERS                                                         //
 // ======================                                                         //
@@ -755,6 +788,59 @@ IF ClearElapsedTimesTrig.Q THEN
 END_IF
 
 
+////////////////////////////////////////////////////////////////////////////////////
+// PART TRACKER TIMES EXPORT                                                      //
+// =========================                                                      //
+// Description:                                                                   //
+//     Exports data from the PLC to the requestor. Operates over MODBUS TCP.      //
+//     The input register MODBUS value (as set by the external user) defines      //
+//     what data is currently residing in the output registers. Only one set      //
+//     of data is exported at a time.                                             //
+////////////////////////////////////////////////////////////////////////////////////
+IF Station_4_FallingTrig.Q THEN
+	GVL.mb_Input_Registers[20] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sn);
+	GVL.mb_Input_Registers[21] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sn        AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[22] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_arr);
+	GVL.mb_Input_Registers[23] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[24] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_dep);
+	GVL.mb_Input_Registers[25] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_dep  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[26] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_arr);
+	GVL.mb_Input_Registers[27] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[28] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_dep);
+	GVL.mb_Input_Registers[29] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_dep  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[30] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_arr);
+	GVL.mb_Input_Registers[31] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[32] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_dep);
+	GVL.mb_Input_Registers[33] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_dep  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[34] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_arr);
+	GVL.mb_Input_Registers[35] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[36] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_dep);
+	GVL.mb_Input_Registers[37] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_dep  AND 16#FFFF0000,16));
+	
+END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// PERFORMANCE LOGGERS                                                            //
+// ===================                                                            //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+TC_Profiler1(bStart := FALSE);
+TC_CpuUsage1(START:=FALSE);
+
+IF ClearElapsedTimesTrig.Q THEN
+	FOR Perf_ClearCTR := 1 TO SIZEOF(Perf_CPUUsage) DO
+		Perf_CPUUsage[Perf_ClearCTR] := -1;
+		Perf_TaskTime[Perf_ClearCTR] := -1;
+	END_FOR
+END_IF
 
 ]]></ST>
     </Implementation>
