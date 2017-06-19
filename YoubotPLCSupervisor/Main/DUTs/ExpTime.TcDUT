@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <DUT Name="ExpTime" Id="{639a5616-9ceb-41a3-9749-092286dfcf92}">
+    <Declaration><![CDATA[TYPE ExpTime :
+STRUCT
+	LO : WORD := 0;
+	HI : WORD := 0;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

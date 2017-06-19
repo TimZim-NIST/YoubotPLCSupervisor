@@ -3,17 +3,18 @@
   <DUT Name="Part" Id="{69cfe8f7-6820-4fe4-b464-8d8f862b3056}">
     <Declaration><![CDATA[TYPE Part :
 STRUCT
-		sn 						: WORD := 0;
-		sta1_del 				: WORD := 0;
-		sta2_del 				: WORD := 0;
-		sta3_del 				: WORD := 0;
-		sta4_del 				: WORD := 0;
-		sta6_del 				: WORD := 0;
-		sta1_to_sta2_del 		: WORD := 0;
-		sta2_to_sta3_del 		: WORD := 0;
-		sta3_to_sta4_del 		: WORD := 0;
-		sta6_to_sta1_del 		: WORD := 0;
-		inspection				: WORD := 0;
+		sn 						: UDINT := 0;
+		inspection				: UDINT := 0;
+		sta1_arr 				: UDINT := 0;
+		sta1_dep 				: UDINT := 0;
+		sta2_arr 				: UDINT := 0;
+		sta2_dep 				: UDINT := 0;
+		sta3_arr 				: UDINT := 0;
+		sta3_dep				: UDINT := 0;
+		sta4_arr 				: UDINT := 0;
+		sta4_dep				: UDINT := 0;
+		sta6_arr 				: UDINT := 0;
+		sta6_dep                : UDINT := 0;
 END_STRUCT
 END_TYPE
 ]]></Declaration>

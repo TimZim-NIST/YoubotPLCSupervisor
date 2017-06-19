@@ -66,6 +66,11 @@ VAR
 	Station_3_ProcessTime : WORD := 4;
 	Station_4_ProcessTime : WORD := 5;
 	
+	Station_1_Counters : StationCounters;
+	Station_2_Counters : StationCounters;
+	Station_3_Counters : StationCounters;
+	Station_4_Counters : StationCounters;
+	
 	Indicator_Flash_Timer : TON;
 	EStop_Flash_Timer     : TON;
 	
@@ -85,9 +90,8 @@ VAR
 	ClearElapsedTimesTrig     : R_TRIG;
 	
 	PartTrackerArr            : ARRAY[1..512] OF Part;
-	//UniquePartSnCounter       : CTU;
 	UniquePartSn              : WORD := 1;
-	PartTrackerClearCTR       : INT := 0;
+	PartTrackerClearCTR       : UINT := 0;
 	
 	Robot_1_Part_SN   		  : WORD := 0;
 	Robot_2_Part_SN   		  : WORD := 0;
@@ -106,9 +110,54 @@ VAR
 	PartTrackerExportData     : Part;
 	CurrentExportPartSN       : WORD;
 	
+	ExperimentTime            : UDINT := 0;
+	ExperimentStartTrig       : R_TRIG;
+	ExperimentStartTime_0     : WORD := 0;
+	ExperimentStartTime_1     : WORD := 0;
+	ExperimentStartTime_2     : WORD := 0;
+	ExperimentStartTime_3     : WORD := 0;
+
+	WindowsTime              : NT_GetTime;
+	WindowsTimeStruct        : TIMESTRUCT;
+	WindowsFILETIME          : T_FILETIME;
+	GotNewTime               : BOOL := FALSE;
+	
+	TC_CpuUsage1       : TC_CpuUsage;
+    TC_CpuUsage_Busy   : BOOL;
+    TC_CpuUsage_Err    : BOOL;
+    TC_CpuUsage_ErrId  : UDINT;
+    CpuUsage           : UDINT;
+	
+	TC_Profiler1       : FB_CxProfiler;
+	ExecutionTime      : ST_CX_ProfilerStruct;
+	
+	Perf_TaskTime      : ARRAY[1..16383] OF INT;
+	Perf_CPUUsage      : ARRAY[1..16383] OF INT;
+	
+	Perf_LogTime       : UDINT := 0;
+	Perf_ClearCTR      : UINT := 0;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[
+      <ST><![CDATA[////////////////////////////////////////////////////////////////////////////////////
+// PERFORMANCE LOGGERS                                                            //
+// ===================                                                            //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+TC_Profiler1(stData=>ExecutionTime, bReset:=yellow_button);
+// Record these values every 1 second after execution start (10ms rate * 100)
+IF ExperimentTime MOD 100 = 0 THEN
+	// Store the previous values before we start
+	IF ExperimentTime > 0 THEN
+		Perf_LogTime := ExperimentTime / 100;
+		Perf_CPUUsage[Perf_LogTime] := UDINT_TO_INT(CpuUsage);
+		Perf_TaskTime[Perf_LogTime] := UDINT_TO_INT(ExecutionTime.dwLastExecTime);
+	END_IF
+	// Start a new sample
+	TC_CpuUsage1(START:=TRUE, BUSY=>TC_CpuUsage_Busy, ERR=>TC_CpuUsage_Err, ERRID=>TC_CpuUsage_ErrId, USAGE=>CpuUsage);
+	TC_Profiler1(bStart := TRUE);
+END_IF
+
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION PROCESS TIMERS                                                         //
 // ======================                                                         //
@@ -225,15 +274,21 @@ Station_1_ProcessTime      := GVL.mb_Output_Registers[1];
 Station_2_ProcessTime      := GVL.mb_Output_Registers[2];
 Station_3_ProcessTime      := GVL.mb_Output_Registers[3];
 Station_4_ProcessTime      := GVL.mb_Output_Registers[4];
-GVL.mb_Output_Registers[5] := INT_TO_WORD(Station_1_DelayCounter);
-GVL.mb_Output_Registers[6] := INT_TO_WORD(Station_2_DelayCounter);
-GVL.mb_Output_Registers[7] := INT_TO_WORD(Station_3_DelayCounter);
-GVL.mb_Output_Registers[8] := INT_TO_WORD(Station_4_DelayCounter);
+GVL.mb_Output_Registers[5] := UINT_TO_WORD(Station_1_DelayCounter);
+GVL.mb_Output_Registers[6] := UINT_TO_WORD(Station_2_DelayCounter);
+GVL.mb_Output_Registers[7] := UINT_TO_WORD(Station_3_DelayCounter);
+GVL.mb_Output_Registers[8] := UINT_TO_WORD(Station_4_DelayCounter);
  
 EnclaveExperimentMode      := GVL.mb_Output_Registers[9];
 EnclaveExperimentValue     := GVL.mb_Output_Registers[10];
 
 CurrentExportPartSN        := GVL.mb_Output_Registers[11];
+
+// Experiment Start Time
+GVL.mb_Output_Registers[12] := ExperimentStartTime_0;
+GVL.mb_Output_Registers[13] := ExperimentStartTime_1;
+GVL.mb_Output_Registers[14] := ExperimentStartTime_2;
+GVL.mb_Output_Registers[15] := ExperimentStartTime_3;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS OUT REGISTERS                                                           //
@@ -258,17 +313,35 @@ GVL.mb_Input_Registers[5] := Station_3_Part_SN;
 GVL.mb_Input_Registers[6] := Station_4_Part_SN;
 GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 
-GVL.mb_Input_Registers[10] := PartTrackerExportData.sn;
-GVL.mb_Input_Registers[11] := PartTrackerExportData.sta1_del;
-GVL.mb_Input_Registers[12] := PartTrackerExportData.sta2_del;
-GVL.mb_Input_Registers[13] := PartTrackerExportData.sta3_del;
-GVL.mb_Input_Registers[14] := PartTrackerExportData.sta4_del;
-GVL.mb_Input_Registers[15] := PartTrackerExportData.sta6_del;
-GVL.mb_Input_Registers[16] := PartTrackerExportData.sta1_to_sta2_del;
-GVL.mb_Input_Registers[17] := PartTrackerExportData.sta2_to_sta3_del;
-GVL.mb_Input_Registers[18] := PartTrackerExportData.sta3_to_sta4_del;
-GVL.mb_Input_Registers[19] := PartTrackerExportData.sta6_to_sta1_del;
-GVL.mb_Input_Registers[20] := PartTrackerExportData.inspection;
+////////////////////////////////////////////////////////////////////////////////////
+// EXPERIMENT TIME COUNTER                                                        //
+// =======================                                                        //
+// Description:                                                                   //
+//     Keeps track of the amount of time that has ocurred since the experiment    //
+//     was started. Two words are required to reach a maximum of 497 days.        //
+//     Records time in 10 millisecond increments. Time could be tracked with an   //
+//     integer, but conversions would have to be done to fit it in the MODBUS     //
+//     table. It is easier to handle it in HI and LO, and convert offline.        //
+//     The trigger is used to force the logic to ignore the first iteration after //
+//     the MasterRunStop is enabled, as this would permaturely increase the       //       
+//     counter. This code also captures the PLC system time when the experiment   //
+//     is started.                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+WindowsTime(TIMESTR=>WindowsTimeStruct);
+IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
+	ExperimentTime := ExperimentTime + 1;
+ELSE
+	ExperimentTime := 0;
+END_IF
+
+IF GotNewTime THEN
+	ExperimentStartTime_0 := UDINT_TO_WORD(WindowsFILETIME.dwLowDateTime);
+	ExperimentStartTime_1 := UDINT_TO_WORD(SHR(WindowsFILETIME.dwLowDateTime AND 16#FFFF0000,16));
+	ExperimentStartTime_2 := UDINT_TO_WORD(WindowsFILETIME.dwHighDateTime);
+	ExperimentStartTime_3 := UDINT_TO_WORD(SHR(WindowsFILETIME.dwHighDateTime AND 16#FFFF0000,16));
+	GotNewTime := FALSE;
+END_IF
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION RESIDENCE COUNTERS                                                     //
@@ -397,9 +470,17 @@ END_IF
 StartButtonTimer(IN:=green_button, PT:=T#2.0S);
 IF NOT black_switch = TRUE THEN
 	IF NOT MasterRunStop AND green_button AND StartButtonTimer.Q THEN
-		MasterRunStop := TRUE;
+		// LOG THE SYSTEM START TIME BEFORE CONTINUING
+		WindowsTime(START:=TRUE);
+		IF NOT WindowsTime.BUSY THEN
+			WindowsTime(START:=FALSE);
+			WindowsFILETIME := SYSTEMTIME_TO_FILETIME(systemTime:=WindowsTimeStruct);
+			MasterRunStop := TRUE;
+			GotNewTime := TRUE;
+		END_IF
 	END_IF
 ELSE
+	WindowsTime(START:=FALSE);
 	MasterRunStop := FALSE;
 END_IF
 
@@ -522,16 +603,17 @@ ClearElapsedTimesTrig(CLK:=ClearElapsedTimes);
 IF ClearElapsedTimesTrig.Q THEN
 	FOR PartTrackerClearCTR := 1 TO 512 DO
 		PartTrackerArr[PartTrackerClearCTR].sn := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta4_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_to_sta2_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_to_sta3_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_to_sta4_del := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_to_sta1_del := 0;
 		PartTrackerArr[PartTrackerClearCTR].inspection := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_arr := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta1_dep := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_arr := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta2_dep := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_arr := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta3_dep := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_arr := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta4_dep := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_arr := 0;
+		PartTrackerArr[PartTrackerClearCTR].sta6_dep := 0;
 	END_FOR
 	Robot_1_Part_SN   := 0;
 	Robot_2_Part_SN   := 0;
@@ -542,7 +624,7 @@ IF ClearElapsedTimesTrig.Q THEN
 	Station_4_Part_SN := 0;
 	Station_6_Part_SN := 1;
 	UniquePartSn := 1;
-	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN;
+	PartTrackerArr[1].sn := Station_6_Part_SN;
 END_IF
 
 // STATION 6 LOGIC
@@ -550,59 +632,60 @@ IF Station_6_RisingTrig.Q AND Station_6_Part_SN = 0 THEN
 	UniquePartSn := UniquePartSn + 1;
 	Station_6_Part_SN := UniquePartSn;
 	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN; // Set the SN
+	PartTrackerArr[Station_6_Part_SN].sta6_arr := ExperimentTime;
 END_IF
 IF Station_6_FallingTrig.Q AND Robot_1_Part_SN = 0 AND Station_1_Part_SN = 0 THEN
-	PartTrackerArr[Station_6_Part_SN].sta6_del := Station_6_DelayCounter;
+	PartTrackerArr[Station_6_Part_SN].sta6_dep := ExperimentTime;
 	Robot_1_Part_SN := Station_6_Part_SN;
 	Station_6_Part_SN := 0;
 END_IF
 
 // STATION 1 LOGIC
 IF Station_1_RisingTrig.Q AND Station_1_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_Part_SN].sta6_to_sta1_del := Robot_1_DelayCounter;
+	PartTrackerArr[Robot_1_Part_SN].sta1_arr := ExperimentTime;
 	Station_1_Part_SN := Robot_1_Part_SN;
 	Robot_1_Part_SN := 0;
 END_IF
 IF Station_1_FallingTrig.Q AND Robot_1_Part_SN = 0 THEN
-	PartTrackerArr[Station_1_Part_SN].sta1_del := Station_1_DelayCounter;
+	PartTrackerArr[Station_1_Part_SN].sta1_dep := ExperimentTime;
 	Robot_1_Part_SN := Station_1_Part_SN;
 	Station_1_Part_SN := 0;
 END_IF
 
 // STATION 2 LOGIC
 IF Station_2_RisingTrig.Q AND Station_2_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_Part_SN].sta1_to_sta2_del := Robot_1_DelayCounter;
+	PartTrackerArr[Robot_1_Part_SN].sta2_arr := ExperimentTime;
 	Station_2_Part_SN := Robot_1_Part_SN;
 	Robot_1_Part_SN := 0;
 END_IF
 IF Station_2_FallingTrig.Q AND Robot_1_to_2_Part_SN = 0 THEN
-	PartTrackerArr[Station_2_Part_SN].sta2_del := Station_2_DelayCounter;
+	PartTrackerArr[Station_2_Part_SN].sta2_dep := ExperimentTime;
 	Robot_1_to_2_Part_SN := Station_2_Part_SN;
 	Station_2_Part_SN := 0;
 END_IF
 
 // STATION 3 LOGIC
 IF Station_3_RisingTrig.Q AND Station_3_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_to_2_Part_SN].sta2_to_sta3_del := Robot_1_to_2_DelayCounter;
+	PartTrackerArr[Robot_1_to_2_Part_SN].sta3_arr := ExperimentTime;
 	Station_3_Part_SN := Robot_1_to_2_Part_SN;
 	Robot_1_to_2_Part_SN := 0;
 END_IF
 IF Station_3_FallingTrig.Q AND Robot_2_Part_SN = 0 THEN
-	PartTrackerArr[Station_3_Part_SN].sta3_del := Station_3_DelayCounter;
+	PartTrackerArr[Station_3_Part_SN].sta3_dep := ExperimentTime;
 	Robot_2_Part_SN := Station_3_Part_SN;
 	Station_3_Part_SN := 0;
 END_IF
 
 // STATION 4 LOGIC
 IF Station_4_RisingTrig.Q AND Station_4_Part_SN = 0 THEN
-	PartTrackerArr[Robot_2_Part_SN].sta3_to_sta4_del := Robot_2_DelayCounter;
+	PartTrackerArr[Robot_2_Part_SN].sta4_arr := ExperimentTime;
 	Station_4_Part_SN := Robot_2_Part_SN;
 	Robot_2_Part_SN := 0;
 END_IF
 IF Station_4_FallingTrig.Q AND Station_4_Part_SN > 0 THEN // Only trigger if there is a part in the station
-	PartTrackerArr[Station_4_Part_SN].sta4_del := Station_4_DelayCounter;
+	PartTrackerArr[Station_4_Part_SN].sta4_dep := ExperimentTime;
+	PartTrackerArr[Station_4_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
 	Station_4_Part_SN := 0;
-	PartTrackerArr[Station_3_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
 	FinishedParts := FinishedParts + 1;
 END_IF
 
@@ -642,6 +725,68 @@ ELSE // If MasterRunStop is FALSE, then we need to clear the timer
 	EnclaveExperimentTime_Counter := 0;
 END_IF
 
+//////////////////////////////////////////////
+// Code for tracking station specific times //
+// e.g. idle, processing, and waiting       //
+//////////////////////////////////////////////
+IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
+	///////////////
+	// Station 1 //
+	///////////////
+	IF station_1_sensor = TRUE AND Station_1_Timer.Q = TRUE THEN
+		Station_1_Counters.Waiting_Counter := Station_1_Counters.Waiting_Counter + 1;
+	ELSIF station_1_sensor = TRUE AND Station_1_Timer.Q = FALSE THEN 
+		Station_1_Counters.Process_Counter := Station_1_Counters.Process_Counter + 1;
+	ELSIF station_1_sensor = FALSE THEN
+		Station_1_Counters.Idle_Counter := Station_1_Counters.Idle_Counter + 1;
+	END_IF
+	///////////////
+	// Station 2 //
+	///////////////
+	IF station_2_sensor = TRUE AND Station_2_Timer.Q = TRUE THEN
+		Station_2_Counters.Waiting_Counter := Station_2_Counters.Waiting_Counter + 1;
+	ELSIF station_2_sensor = TRUE AND Station_2_Timer.Q = FALSE THEN 
+		Station_2_Counters.Process_Counter := Station_2_Counters.Process_Counter + 1;
+	ELSIF station_2_sensor = FALSE THEN
+		Station_2_Counters.Idle_Counter := Station_2_Counters.Idle_Counter + 1;
+	END_IF
+	///////////////
+	// Station 3 //
+	///////////////
+	IF station_3_sensor = TRUE AND Station_3_Timer.Q = TRUE THEN
+		Station_3_Counters.Waiting_Counter := Station_3_Counters.Waiting_Counter + 1;
+	ELSIF station_3_sensor = TRUE AND Station_3_Timer.Q = FALSE THEN 
+		Station_3_Counters.Process_Counter := Station_3_Counters.Process_Counter + 1;
+	ELSIF station_3_sensor = FALSE THEN
+		Station_3_Counters.Idle_Counter := Station_3_Counters.Idle_Counter + 1;
+	END_IF
+	///////////////
+	// Station 4 //
+	///////////////
+	IF station_4_sensor = TRUE AND Station_4_Timer.Q = TRUE THEN
+		Station_4_Counters.Waiting_Counter := Station_4_Counters.Waiting_Counter + 1;
+	ELSIF station_4_sensor = TRUE AND Station_4_Timer.Q = FALSE THEN 
+		Station_4_Counters.Process_Counter := Station_4_Counters.Process_Counter + 1;
+	ELSIF station_4_sensor = FALSE THEN
+		Station_4_Counters.Idle_Counter := Station_4_Counters.Idle_Counter + 1;
+	END_IF
+END_IF
+
+IF ClearElapsedTimesTrig.Q THEN
+	Station_1_Counters.Idle_Counter := 0;
+	Station_1_Counters.Process_Counter := 0;
+	Station_1_Counters.Waiting_Counter := 0;
+	Station_2_Counters.Idle_Counter := 0;
+	Station_2_Counters.Process_Counter := 0;
+	Station_2_Counters.Waiting_Counter := 0;
+	Station_3_Counters.Idle_Counter := 0;
+	Station_3_Counters.Process_Counter := 0;
+	Station_3_Counters.Waiting_Counter := 0;
+	Station_4_Counters.Idle_Counter := 0;
+	Station_4_Counters.Process_Counter := 0;
+	Station_4_Counters.Waiting_Counter := 0;
+END_IF
+
 
 ////////////////////////////////////////////////////////////////////////////////////
 // PART TRACKER TIMES EXPORT                                                      //
@@ -652,30 +797,49 @@ END_IF
 //     what data is currently residing in the output registers. Only one set      //
 //     of data is exported at a time.                                             //
 ////////////////////////////////////////////////////////////////////////////////////
-IF CurrentExportPartSN > 0 AND CurrentExportPartSN <= 512 THEN
-	PartTrackerExportData.sn               := PartTrackerArr[CurrentExportPartSN].sn;
-	PartTrackerExportData.sta1_del         := PartTrackerArr[CurrentExportPartSN].sta1_del;
-	PartTrackerExportData.sta2_del         := PartTrackerArr[CurrentExportPartSN].sta2_del;
-	PartTrackerExportData.sta3_del         := PartTrackerArr[CurrentExportPartSN].sta3_del;
-	PartTrackerExportData.sta4_del         := PartTrackerArr[CurrentExportPartSN].sta4_del;
-	PartTrackerExportData.sta6_del         := PartTrackerArr[CurrentExportPartSN].sta6_del;
-	PartTrackerExportData.sta1_to_sta2_del := PartTrackerArr[CurrentExportPartSN].sta1_to_sta2_del;
-	PartTrackerExportData.sta2_to_sta3_del := PartTrackerArr[CurrentExportPartSN].sta2_to_sta3_del;
-	PartTrackerExportData.sta3_to_sta4_del := PartTrackerArr[CurrentExportPartSN].sta3_to_sta4_del;
-	PartTrackerExportData.sta6_to_sta1_del := PartTrackerArr[CurrentExportPartSN].sta6_to_sta1_del;
-	PartTrackerExportData.inspection       := PartTrackerArr[CurrentExportPartSN].inspection;
-ELSE
-	PartTrackerExportData.sn               := 0;
-	PartTrackerExportData.sta1_del         := 0;
-	PartTrackerExportData.sta2_del         := 0;
-	PartTrackerExportData.sta3_del         := 0;
-	PartTrackerExportData.sta4_del         := 0;
-	PartTrackerExportData.sta6_del         := 0;
-	PartTrackerExportData.sta1_to_sta2_del := 0;
-	PartTrackerExportData.sta2_to_sta3_del := 0;
-	PartTrackerExportData.sta3_to_sta4_del := 0;
-	PartTrackerExportData.sta6_to_sta1_del := 0;
-	PartTrackerExportData.inspection       := 0;
+IF Station_4_FallingTrig.Q THEN
+	GVL.mb_Input_Registers[20] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sn);
+	GVL.mb_Input_Registers[21] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sn        AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[22] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_arr);
+	GVL.mb_Input_Registers[23] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[24] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_dep);
+	GVL.mb_Input_Registers[25] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_dep  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[26] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_arr);
+	GVL.mb_Input_Registers[27] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[28] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_dep);
+	GVL.mb_Input_Registers[29] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_dep  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[30] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_arr);
+	GVL.mb_Input_Registers[31] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[32] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_dep);
+	GVL.mb_Input_Registers[33] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_dep  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[34] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_arr);
+	GVL.mb_Input_Registers[35] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_arr  AND 16#FFFF0000,16));
+	
+	GVL.mb_Input_Registers[36] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_dep);
+	GVL.mb_Input_Registers[37] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_dep  AND 16#FFFF0000,16));
+	
+END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// PERFORMANCE LOGGERS                                                            //
+// ===================                                                            //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+TC_Profiler1(bStart := FALSE);
+TC_CpuUsage1(START:=FALSE);
+
+IF ClearElapsedTimesTrig.Q THEN
+	FOR Perf_ClearCTR := 1 TO SIZEOF(Perf_CPUUsage) DO
+		Perf_CPUUsage[Perf_ClearCTR] := -1;
+		Perf_TaskTime[Perf_ClearCTR] := -1;
+	END_FOR
 END_IF
 
 ]]></ST>
