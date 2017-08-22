@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <DUT Name="MachiningStation_DiscreteInputs" Id="{8d55a58e-86d0-4190-ae66-aa67df72087b}">
+    <Declaration><![CDATA[TYPE MachiningStation_DiscreteInputs :
+STRUCT;
+	EStop_Status		: BOOL;
+	Door_State			: BOOL;
+	Chuck_State			: BOOL;
+	Stock_Present		: BOOL;
+	Inspection_Pass		: BOOL;
+	Inspection_Fail		: BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

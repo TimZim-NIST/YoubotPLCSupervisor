@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <DUT Name="MachiningStation_InputRegs" Id="{c78ce1a1-3f35-4af2-94f2-111e3ee69c6b}">
+    <Declaration><![CDATA[TYPE MachiningStation_InputRegs :
+STRUCT
+	Machine_State		: WORD;
+	Machine_Mode		: WORD;
+	Machine_Progress	: WORD;
+	Machine_Part_Count	: WORD;
+	Machine_Heartbeat	: WORD;
+	Machine_ID			: WORD;
+	Machine_Sim_Version	: WORD;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

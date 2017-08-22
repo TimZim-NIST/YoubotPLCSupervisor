@@ -136,9 +136,69 @@ VAR
 	
 	Perf_LogTime       : UDINT := 0;
 	Perf_ClearCTR      : UINT := 0;
+	
+	Station1_MBData		: MachiningStation;
+	Station1_MBFunc		: process_mbtcp;
+	Station2_MBData		: MachiningStation;
+	Station2_MBFunc		: process_mbtcp;
+	Station3_MBData		: MachiningStation;
+	Station3_MBFunc		: process_mbtcp;
+	Station4_MBData		: MachiningStation;
+	Station4_MBFunc		: process_mbtcp;
+	
+	Robot1 : Robot;
+	Robot2 : Robot;
+	
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[////////////////////////////////////////////////////////////////////////////////////
+      <ST><![CDATA[
+// Read the current MODBUS values from the machining stations 
+Station1_MBFunc(station_ip := '192.168.1.101', data => Station1_MBData, perform_read := TRUE);
+Station2_MBFunc(station_ip := '192.168.1.102', data => Station2_MBData, perform_read := TRUE);
+Station3_MBFunc(station_ip := '192.168.1.103', data => Station3_MBData, perform_read := TRUE);
+Station4_MBFunc(station_ip := '192.168.1.104', data => Station4_MBData, perform_read := TRUE);
+
+// Robot Tasks //
+
+// Get the transfer status from MBTCP
+Robot1.Transfer := mb_Output_Coils[10];
+
+// Get the proximity status from MBTCP
+Station1_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[11];
+Station2_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[12];
+Station3_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[13];
+Station4_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[14];
+
+//arm1
+IF Station1_MBData.IR.Machine_State > 0 AND Station2_MBData.IR.Machine_State = 3 AND Station3_MBData.IR.Machine_State = 0 AND
+ NOT(EnclaveExperimentMode = 2 AND Station_2_Part_SN > EnclaveExperimentValue) THEN
+	Robot1.Job := 101; // 2to7
+ELSIF Station1_MBData.IR.Machine_State = 0 AND station_6_sensor = TRUE THEN
+	Robot1.Job := 102; // 6to1
+ELSIF Station2_MBData.IR.Machine_State = 0 AND Station1_MBData.IR.Machine_State = 3 THEN
+	Robot1.Job := 103; // 1to2
+ELSE
+	Robot1.Job := 0;
+END_IF
+
+//arm2
+IF Station3_MBData.IR.Machine_State = 0 AND Robot1.Transfer = TRUE THEN
+	Robot2.Job := 201; // 8to3
+ELSIF Station3_MBData.IR.Machine_State = 3 AND Station4_MBData.IR.Machine_State = 0 THEN
+	Robot2.Job := 202; // 3to4
+ELSIF Station4_MBData.IR.Machine_State = 3 THEN
+	Robot2.Job := 203; // 4to5
+ELSE
+	Robot2.Job := 0;
+END_IF
+
+// Update robot job MBTCP registers
+GVL.mb_Input_Registers[10] := Robot1.Job;
+GVL.mb_Input_Registers[11] := Robot2.Job;
+
+// Update robot proximity coils
+
+////////////////////////////////////////////////////////////////////////////////////
 // PERFORMANCE LOGGERS                                                            //
 // ===================                                                            //
 //                                                                                //
@@ -157,6 +217,10 @@ IF ExperimentTime MOD 100 = 0 THEN
 	TC_CpuUsage1(START:=TRUE, BUSY=>TC_CpuUsage_Busy, ERR=>TC_CpuUsage_Err, ERRID=>TC_CpuUsage_ErrId, USAGE=>CpuUsage);
 	TC_Profiler1(bStart := TRUE);
 END_IF
+// We don't want the performance logger overflowing its buffer, so catch it
+IF Perf_LogTime > 16300 THEN
+	MasterRunStop := FALSE;
+END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION PROCESS TIMERS                                                         //
@@ -166,10 +230,10 @@ END_IF
 //     These timers perform that simulation. Times are set by the HMI via         //
 //     global MODBUS values.                                                      //
 ////////////////////////////////////////////////////////////////////////////////////
-Station_1_Timer(IN:=station_1_sensor, PT:=WORD_TO_TIME(Station_1_ProcessTime));
-Station_2_Timer(IN:=station_2_sensor, PT:=WORD_TO_TIME(Station_2_ProcessTime));
-Station_3_Timer(IN:=station_3_sensor, PT:=WORD_TO_TIME(Station_3_ProcessTime));
-Station_4_Timer(IN:=station_4_sensor, PT:=WORD_TO_TIME(Station_4_ProcessTime));
+//Station_1_Timer(IN:=station_1_sensor, PT:=WORD_TO_TIME(Station_1_ProcessTime));
+//Station_2_Timer(IN:=station_2_sensor, PT:=WORD_TO_TIME(Station_2_ProcessTime));
+//Station_3_Timer(IN:=station_3_sensor, PT:=WORD_TO_TIME(Station_3_ProcessTime));
+//Station_4_Timer(IN:=station_4_sensor, PT:=WORD_TO_TIME(Station_4_ProcessTime));
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION TRIGGERS                                                               //
@@ -221,10 +285,14 @@ GVL.mb_Input_Coils[10] := station_6_sensor;
 //     NOTE: Each station has two bits: One to inform that a part is present in   //
 //           the station, and another to inform that a part is ready for pickup.  // 
 ////////////////////////////////////////////////////////////////////////////////////
-GVL.mb_Input_Coils[1]  := Station_1_Timer.Q;
-GVL.mb_Input_Coils[3]  := Station_2_Timer.Q;
-GVL.mb_Input_Coils[5]  := Station_3_Timer.Q;
-GVL.mb_Input_Coils[7]  := Station_4_Timer.Q;
+//GVL.mb_Input_Coils[1]  := Station_1_Timer.Q;
+//GVL.mb_Input_Coils[3]  := Station_2_Timer.Q;
+//GVL.mb_Input_Coils[5]  := Station_3_Timer.Q;
+//GVL.mb_Input_Coils[7]  := Station_4_Timer.Q;
+GVL.mb_Input_Coils[1]  := Station1_MBData.IR.Machine_State = 3;
+GVL.mb_Input_Coils[3]  := Station2_MBData.IR.Machine_State = 3;
+GVL.mb_Input_Coils[5]  := Station3_MBData.IR.Machine_State = 3;
+GVL.mb_Input_Coils[7]  := Station4_MBData.IR.Machine_State = 3;
 GVL.mb_Input_Coils[9]  := 0;
 GVL.mb_Input_Coils[11] := station_6_sensor;
 
@@ -597,7 +665,6 @@ END_IF
 //     If the ClearElapsedTimes external variable is set, it will reset all of    //
 //     the variables and the array to the initial condition.                      //
 ////////////////////////////////////////////////////////////////////////////////////
-//UniquePartSnCounter(PV:=512, CU:=Station_6_RisingTrig.Q);
 ClearElapsedTimesTrig(CLK:=ClearElapsedTimes);
 
 IF ClearElapsedTimesTrig.Q THEN
@@ -625,6 +692,7 @@ IF ClearElapsedTimesTrig.Q THEN
 	Station_6_Part_SN := 1;
 	UniquePartSn := 1;
 	PartTrackerArr[1].sn := Station_6_Part_SN;
+	Perf_LogTime := 0;
 END_IF
 
 // STATION 6 LOGIC
@@ -836,12 +904,18 @@ TC_Profiler1(bStart := FALSE);
 TC_CpuUsage1(START:=FALSE);
 
 IF ClearElapsedTimesTrig.Q THEN
-	FOR Perf_ClearCTR := 1 TO SIZEOF(Perf_CPUUsage) DO
+	FOR Perf_ClearCTR := 1 TO 16383 DO
 		Perf_CPUUsage[Perf_ClearCTR] := -1;
 		Perf_TaskTime[Perf_ClearCTR] := -1;
 	END_FOR
 END_IF
 
+
+// Now that we're done, update the MODBUS registers
+Station1_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station1_MBData.CO.Robot_Proximity);
+Station2_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station2_MBData.CO.Robot_Proximity);
+Station3_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station3_MBData.CO.Robot_Proximity);
+Station4_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station4_MBData.CO.Robot_Proximity);
 ]]></ST>
     </Implementation>
   </POU>

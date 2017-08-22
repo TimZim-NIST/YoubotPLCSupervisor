@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <DUT Name="MachiningStation_HoldingRegs" Id="{8d98413f-9ad2-44a3-9947-5abfd39cb7e5}">
+    <Declaration><![CDATA[TYPE MachiningStation_HoldingRegs :
+STRUCT
+	Machining_Time_Out	: WORD;
+	Mode_Out			: WORD;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

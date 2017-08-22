@@ -1,0 +1,155 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <POU Name="process_mbtcp" Id="{ece536aa-216b-4bd1-b0c0-18bedbc50c0d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK process_mbtcp
+VAR_INPUT
+	station_ip			: STRING(15);
+	station_port		: UINT := 502;
+	station_unit_id		: BYTE := 255;
+	comms_timeout		: TIME := T#10S;
+	perform_read		: BOOL;
+	perform_write		: BOOL;
+	system_mode			: WORD;
+	system_estop		: BOOL;
+	robot_prox			: BOOL;
+END_VAR
+VAR_OUTPUT
+	data				: MachiningStation;
+	comms_err			: UDINT;
+END_VAR
+VAR
+	mb_read_state		: WORD := 0;
+	mb_read_di			: FB_MBReadInputs;
+	mb_read_di_byte		: BYTE;
+	mb_read_ir			: FB_MBReadInputRegs;
+	mb_read_hr			: FB_MBReadRegs;
+	mb_read_co			: FB_MBReadCoils;
+	
+	mb_write_machinemode_state		: WORD := 0;
+	mb_write_machinemode			: FB_MBWriteSingleReg;
+	
+	mb_write_robotprox_state		: WORD := 0;
+	mb_write_robotprox				: FB_MBWriteSingleCoil;
+	mb_robotprox_value				: UINT;
+	last_robotprox_value			: BOOL;
+	
+	mb_write_estop_state			: WORD := 0;
+	mb_write_estop					: FB_MBWriteSingleCoil;
+	mb_estop_value					: WORD;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+////////////////
+// MBTCP READ //
+////////////////
+
+//TODO: Add timers to force a push every X seconds
+
+IF perform_read = TRUE THEN
+	mb_read_co(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, nMBAddr := 0, nQuantity:= 4,
+				tTimeout := comms_timeout, nErrId => comms_err, pDestAddr := ADR(data.CO), cbLength := SIZEOF(data.CO));	
+
+	mb_read_ir(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, nMBAddr := 0, nQuantity:= 7,
+				tTimeout := comms_timeout, nErrId => comms_err, pDestAddr := ADR(data.IR), cbLength := SIZEOF(data.IR));
+				
+	mb_read_di(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, nMBAddr := 0, nQuantity := 4,
+				tTimeout := comms_timeout, nErrId => comms_err, pDestAddr := ADR(mb_read_di_byte), cbLength := SIZEOF(mb_read_di_byte));
+				
+	mb_read_hr(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, nMBAddr := 0, nQuantity := 2,
+				tTimeout := comms_timeout, nErrId => comms_err, pDestAddr := ADR(data.HR), cbLength := SIZEOF(data.HR));
+					
+	CASE mb_read_state OF
+		0:	// START NEW READ
+			mb_read_ir.bExecute := TRUE;
+			mb_read_hr.bExecute := TRUE;
+			mb_read_di.bExecute := TRUE;
+			mb_read_state := 10;
+		10:	// WAIT FOR MBTCP TO RETURN
+			IF mb_read_ir.bBusy = FALSE AND mb_read_di.bBusy = FALSE AND mb_read_hr.bBusy = FALSE THEN
+				mb_read_ir.bExecute := FALSE;
+				mb_read_hr.bExecute := FALSE;
+				mb_read_di.bExecute := FALSE;
+				// Convert DI byte to bits
+				data.DI.EStop_Status 	:= USINT_TO_BOOL(mb_read_di_byte AND 2#0001); 
+				data.DI.Door_State 		:= USINT_TO_BOOL(mb_read_di_byte AND 2#0010); 
+				data.DI.Chuck_State 	:= USINT_TO_BOOL(mb_read_di_byte AND 2#0100); 
+				data.DI.Stock_Present 	:= USINT_TO_BOOL(mb_read_di_byte AND 2#1000); 
+				mb_read_state := 0;
+			END_IF
+	END_CASE
+END_IF
+perform_read := FALSE;
+
+/////////////////
+// MBTCP WRITE //
+/////////////////
+
+// The only three writes we care to set are: the current machine mode, robot prox, and the EStop status 
+IF perform_write = TRUE THEN
+	
+	// MACHINE MODE //
+	CASE mb_write_machinemode_state OF
+		0:	// START NEW WRITE
+			IF NOT (system_mode = data.IR.Machine_Mode) THEN
+				mb_write_machinemode.bExecute := TRUE;
+				mb_write_machinemode_state := 10;
+			END_IF
+		10:	// WAIT FOR MBTCP TO RETURN
+			IF mb_write_machinemode.bBusy = FALSE THEN
+				mb_write_machinemode.bExecute := FALSE;
+				mb_write_machinemode_state := 0;
+			END_IF
+	END_CASE
+	mb_write_machinemode(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, 
+						nMBAddr := 16#01, nValue := system_mode);
+	
+						
+	// ROBOT PROX //
+	CASE mb_write_robotprox_state OF
+		0:	// START NEW WRITE
+			IF NOT (robot_prox = last_robotprox_value) THEN
+				last_robotprox_value := robot_prox;
+				mb_write_robotprox.bExecute := TRUE;
+				mb_write_robotprox_state := 10;
+			END_IF
+		10:	// WAIT FOR MBTCP TO RETURN
+			IF mb_write_robotprox.bBusy = FALSE THEN
+				mb_write_robotprox.bExecute := FALSE;
+				mb_write_robotprox_state := 0;
+			END_IF
+	END_CASE
+	IF robot_prox = TRUE THEN
+		mb_robotprox_value := 16#FF00;
+	ELSE
+		mb_robotprox_value := 16#0000;
+	END_IF
+	mb_write_robotprox(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, nMBAddr := 2, nValue := mb_robotprox_value);
+	
+	
+	// EMERGENCY STOP //
+	CASE mb_write_estop_state OF
+		0:	// START NEW WRITE
+			IF NOT system_estop = data.DI.EStop_Status THEN
+				mb_write_estop.bExecute := TRUE;
+				mb_write_estop_state := 10;
+			END_IF
+		10:	// WAIT FOR MBTCP TO RETURN
+			IF mb_write_estop.bBusy = FALSE THEN
+				mb_write_estop.bExecute := FALSE;
+				mb_write_estop_state := 0;
+			END_IF
+	END_CASE
+	IF system_estop = TRUE THEN
+		mb_estop_value := 16#FF00;
+	ELSE
+		mb_estop_value := 16#0000;
+	END_IF
+	mb_write_estop(	sIPAddr := station_ip, nTCPPort := station_port, nUnitID:= station_unit_id, nMBAddr := 0, nValue := mb_estop_value);
+						
+END_IF
+perform_write := FALSE;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
