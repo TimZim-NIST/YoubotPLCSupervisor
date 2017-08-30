@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <POU Name="TemperatureGen" Id="{ddef72ef-3a82-4c3f-8989-e14b55427cca}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK TemperatureGen
+VAR_INPUT
+	setpoint 	: LREAL;
+END_VAR
+VAR_OUTPUT
+	temperature 	: LREAL;
+END_VAR
+VAR
+	start      		: BOOL 		:= FALSE;
+	temp_sum   		: LREAL;
+	randNumGen 		: DRAND;
+	randNum    		: LREAL;
+	temp_max   		: LREAL;
+	temp_min   		: LREAL;
+	noise 			: LREAL;
+	rate       		: LREAL 	:= 0.5;  // degrees per total ticks
+	range      		: LREAL 	:= 1.0;  // +/- degrees
+	timer      		: UINT 		:= 0;
+	ticks       	: UINT 		:= 3000; // 30 second update
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// A simple brute-force environmental temperature generator for anomaly testing
+temp_max := setpoint + range;
+temp_min := setpoint - range;
+
+// Increase the timer`
+timer := timer + 1;
+
+IF start = FALSE THEN                    		// If this is the first run...
+	temp_sum := setpoint;    					// Set the initial value to the hover point
+	start := TRUE;
+ELSE
+	IF timer >= ticks THEN						// Only execute if a ticksPerMinute has passed
+		timer := 0;
+		randNumGen(Seed:=0,Num=>randNum); 		// Get the new random number
+		noise := ((randNum - 0.5) * rate);		// Generate some noise/fluctuation
+		IF temp_sum > temp_max THEN				// We are too hot!
+			temp_sum := temp_sum - (rate + noise);
+		ELSIF temp_sum < temp_min THEN			// We are too cold!
+			temp_sum := temp_sum + (rate + noise);
+		ELSE	// If we are within the expected temperature range, we randomly fluctuate
+			temp_sum := temp_sum + noise;
+		END_IF
+	END_IF
+END_IF
+
+// Set the temperature before we leave (tenths of degrees F)
+temperature := temp_sum;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

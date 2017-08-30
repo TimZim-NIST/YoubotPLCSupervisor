@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.36">
+  <DUT Name="Robot" Id="{dd225ca7-9894-4635-b155-bb1b723c9fa8}">
+    <Declaration><![CDATA[TYPE Robot :
+STRUCT
+	JointStates 	: JointState;		// STRUCT to contain all of the joint states (pos,vel,I)
+	Job         	: UINT := 0;		// Job the robot should be performing
+	Active      	: BOOL := FALSE;	// Status bit - TRUE if robot is moving
+	Transfer		: BOOL := FALSE;	// Status bit - (Robot1 is ready to transfer)
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
