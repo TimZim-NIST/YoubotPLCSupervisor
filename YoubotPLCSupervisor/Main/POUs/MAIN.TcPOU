@@ -130,8 +130,10 @@ VAR
 	
 	TC_Profiler1       : FB_CxProfiler;
 	ExecutionTime      : ST_CX_ProfilerStruct;
+	maxExecutionTime   : DWORD := 0;
 	
 	Perf_TaskTime      : ARRAY[1..16383] OF INT;
+	Perf_MaxTaskTime   : ARRAY[1..16383] OF INT;
 	Perf_CPUUsage      : ARRAY[1..16383] OF INT;
 	
 	Perf_LogTime       : UDINT := 0;
@@ -149,364 +151,348 @@ VAR
 	Robot1 : Robot;
 	Robot2 : Robot;
 	
+	temperatureProbe	: TemperatureGen;
+	roomTemperature     : LREAL;
+	roomTempSetpoint    : LREAL := 70.0;
+	
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
-// Read the current MODBUS values from the machining stations 
-Station1_MBFunc(station_ip := '192.168.1.101', data => Station1_MBData, perform_read := TRUE);
-Station2_MBFunc(station_ip := '192.168.1.102', data => Station2_MBData, perform_read := TRUE);
-Station3_MBFunc(station_ip := '192.168.1.103', data => Station3_MBData, perform_read := TRUE);
-Station4_MBFunc(station_ip := '192.168.1.104', data => Station4_MBData, perform_read := TRUE);
-
-// Robot Tasks //
-
-// Get the transfer status from MBTCP
-Robot1.Transfer := mb_Output_Coils[10];
-
-// Get the proximity status from MBTCP
-Station1_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[11];
-Station2_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[12];
-Station3_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[13];
-Station4_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[14];
-
-//arm1
-IF Station1_MBData.IR.Machine_State > 0 AND Station2_MBData.IR.Machine_State = 3 AND Station3_MBData.IR.Machine_State = 0 AND
- NOT(EnclaveExperimentMode = 2 AND Station_2_Part_SN > EnclaveExperimentValue) THEN
-	Robot1.Job := 101; // 2to7
-ELSIF Station1_MBData.IR.Machine_State = 0 AND station_6_sensor = TRUE THEN
-	Robot1.Job := 102; // 6to1
-ELSIF Station2_MBData.IR.Machine_State = 0 AND Station1_MBData.IR.Machine_State = 3 THEN
-	Robot1.Job := 103; // 1to2
-ELSE
-	Robot1.Job := 0;
-END_IF
-
-//arm2
-IF Station3_MBData.IR.Machine_State = 0 AND Robot1.Transfer = TRUE THEN
-	Robot2.Job := 201; // 8to3
-ELSIF Station3_MBData.IR.Machine_State = 3 AND Station4_MBData.IR.Machine_State = 0 THEN
-	Robot2.Job := 202; // 3to4
-ELSIF Station4_MBData.IR.Machine_State = 3 THEN
-	Robot2.Job := 203; // 4to5
-ELSE
-	Robot2.Job := 0;
-END_IF
-
-// Update robot job MBTCP registers
-GVL.mb_Input_Registers[10] := Robot1.Job;
-GVL.mb_Input_Registers[11] := Robot2.Job;
-
-// Update robot proximity coils
-
 ////////////////////////////////////////////////////////////////////////////////////
 // PERFORMANCE LOGGERS                                                            //
 // ===================                                                            //
-//                                                                                //
-////////////////////////////////////////////////////////////////////////////////////
-
-TC_Profiler1(stData=>ExecutionTime, bReset:=yellow_button);
-// Record these values every 1 second after execution start (10ms rate * 100)
-IF ExperimentTime MOD 100 = 0 THEN
-	// Store the previous values before we start
-	IF ExperimentTime > 0 THEN
-		Perf_LogTime := ExperimentTime / 100;
-		Perf_CPUUsage[Perf_LogTime] := UDINT_TO_INT(CpuUsage);
-		Perf_TaskTime[Perf_LogTime] := UDINT_TO_INT(ExecutionTime.dwLastExecTime);
-	END_IF
-	// Start a new sample
-	TC_CpuUsage1(START:=TRUE, BUSY=>TC_CpuUsage_Busy, ERR=>TC_CpuUsage_Err, ERRID=>TC_CpuUsage_ErrId, USAGE=>CpuUsage);
-	TC_Profiler1(bStart := TRUE);
-END_IF
-// We don't want the performance logger overflowing its buffer, so catch it
-IF Perf_LogTime > 16300 THEN
-	MasterRunStop := FALSE;
-END_IF
-
-////////////////////////////////////////////////////////////////////////////////////
-// STATION PROCESS TIMERS                                                         //
-// ======================                                                         //
 // Description:                                                                   //
-//     Each station simulates a machining operation (e.g. milling, grinding).     //
-//     These timers perform that simulation. Times are set by the HMI via         //
-//     global MODBUS values.                                                      //
+//   CPU usage logger and task time logger. Task time is logged as both the       //
+//   average over 100 cycles (1 second), and the maximum that occurred during the //
+//   100 cycles.                                                                  //
 ////////////////////////////////////////////////////////////////////////////////////
-//Station_1_Timer(IN:=station_1_sensor, PT:=WORD_TO_TIME(Station_1_ProcessTime));
-//Station_2_Timer(IN:=station_2_sensor, PT:=WORD_TO_TIME(Station_2_ProcessTime));
-//Station_3_Timer(IN:=station_3_sensor, PT:=WORD_TO_TIME(Station_3_ProcessTime));
-//Station_4_Timer(IN:=station_4_sensor, PT:=WORD_TO_TIME(Station_4_ProcessTime));
+
+	TC_Profiler1(stData=>ExecutionTime, bReset:=yellow_button);
+	maxExecutionTime := MAX(maxExecutionTime,ExecutionTime.dwLastExecTime);
+	// Record these values every 1 second after execution start (10ms rate * 100)
+	IF ExperimentTime MOD 100 = 0 THEN
+		// Store the previous values before we start
+		IF ExperimentTime > 0 THEN
+			Perf_LogTime := ExperimentTime / 100;
+			Perf_CPUUsage[Perf_LogTime] := UDINT_TO_INT(CpuUsage);
+			Perf_TaskTime[Perf_LogTime] := UDINT_TO_INT(ExecutionTime.dwAverageExecTime);
+			Perf_MaxTaskTime[Perf_LogTime] := UDINT_TO_INT(maxExecutionTime);
+			maxExecutionTime := 0;
+		END_IF
+		// Start a new sample
+		TC_CpuUsage1(START:=TRUE, BUSY=>TC_CpuUsage_Busy, ERR=>TC_CpuUsage_Err, ERRID=>TC_CpuUsage_ErrId, USAGE=>CpuUsage);
+	END_IF
+	TC_Profiler1(bStart := TRUE);
+	
+	// We don't want the performance logger overflowing its buffer, so catch it
+	IF Perf_LogTime > 16300 THEN
+		MasterRunStop := FALSE;
+	END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// MODBUS TCP READ                                                                //
+// ===============                                                                //
+// Description:                                                                   //
+//   Read the current MODBUS values from the machining stations.                  //
+////////////////////////////////////////////////////////////////////////////////////
+
+	Station1_MBFunc(station_ip := '192.168.1.101', data => Station1_MBData, perform_read := TRUE);
+	Station2_MBFunc(station_ip := '192.168.1.102', data => Station2_MBData, perform_read := TRUE);
+	Station3_MBFunc(station_ip := '192.168.1.103', data => Station3_MBData, perform_read := TRUE);
+	Station4_MBFunc(station_ip := '192.168.1.104', data => Station4_MBData, perform_read := TRUE);
+	
+////////////////////////////////////////////////////////////////////////////////////
+// ROBOT FUNCTIONS                                                                //
+// ===============                                                                //
+// Description:                                                                   //
+//   Robots exchange part transfer information through the MODBUS server (for the //
+//   R1-to-R2 move). Robots also post proximity information to the MODBUS server  //
+//   for each station.                                                            //
+//                                                                                //
+//   Based on the data obtained from the stations via MBTCP, make a decision for  //
+//   which job each robot should be performing. The jobs are only scanned while   //
+//   the robots are idle, so we don't care if the job changes while the robots    //
+//   are actively performing another job.                                         //
+////////////////////////////////////////////////////////////////////////////////////
+
+	// Get the transfer status from MBTCP
+	Robot1.Transfer := mb_Output_Coils[10];
+	
+	// Get the proximity status from MBTCP
+	Station1_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[11];
+	Station2_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[12];
+	Station3_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[13];
+	Station4_MBData.CO.Robot_Proximity := GVL.mb_Output_Coils[14];
+
+	// Robot 1 job logic
+	IF Station1_MBData.IR.Machine_State > 0 AND Station2_MBData.IR.Machine_State = 3 AND Station3_MBData.IR.Machine_State = 0 AND
+	 NOT(EnclaveExperimentMode = 2 AND Station_2_Part_SN > EnclaveExperimentValue) THEN
+		Robot1.Job := 101; // 2to7
+	ELSIF Station1_MBData.IR.Machine_State = 0 AND station_6_sensor = TRUE THEN
+		Robot1.Job := 102; // 6to1
+	ELSIF Station2_MBData.IR.Machine_State = 0 AND Station1_MBData.IR.Machine_State = 3 THEN
+		Robot1.Job := 103; // 1to2
+	ELSE
+		Robot1.Job := 0;
+	END_IF
+	
+	// Robot 2 job logic
+	IF Station3_MBData.IR.Machine_State = 0 AND Robot1.Transfer = TRUE THEN
+		Robot2.Job := 201; // 8to3
+	ELSIF Station3_MBData.IR.Machine_State = 3 AND Station4_MBData.IR.Machine_State = 0 THEN
+		Robot2.Job := 202; // 3to4
+	ELSIF Station4_MBData.IR.Machine_State = 3 THEN
+		Robot2.Job := 203; // 4to5
+	ELSE
+		Robot2.Job := 0;
+	END_IF
+	
+	// Update robot job MBTCP registers
+	GVL.mb_Input_Registers[10] := Robot1.Job;
+	GVL.mb_Input_Registers[11] := Robot2.Job;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION TRIGGERS                                                               //
 // ================                                                               //
 // Description:                                                                   //
-//     Triggers for each station sensor. Useful within the code. Not all trigs    //
-//     are used; they are here for convenience.                                   //
+//   Triggers for each station sensor. Useful within the code. Not all trigs      //
+//   are used; they are here for convenience.                                     //
 ////////////////////////////////////////////////////////////////////////////////////
-Station_1_RisingTrig(CLK:=station_1_sensor);
-Station_2_RisingTrig(CLK:=station_2_sensor);
-Station_3_RisingTrig(CLK:=station_3_sensor);
-Station_4_RisingTrig(CLK:=station_4_sensor);
-Station_6_RisingTrig(CLK:=station_6_sensor);
 
-Station_1_FallingTrig(CLK:=station_1_sensor);
-Station_2_FallingTrig(CLK:=station_2_sensor);
-Station_3_FallingTrig(CLK:=station_3_sensor);
-Station_4_FallingTrig(CLK:=station_4_sensor);
-Station_6_FallingTrig(CLK:=station_6_sensor);
+	Station_1_RisingTrig(CLK:=station_1_sensor);
+	Station_2_RisingTrig(CLK:=station_2_sensor);
+	Station_3_RisingTrig(CLK:=station_3_sensor);
+	Station_4_RisingTrig(CLK:=station_4_sensor);
+	Station_6_RisingTrig(CLK:=station_6_sensor);
+	
+	Station_1_FallingTrig(CLK:=station_1_sensor);
+	Station_2_FallingTrig(CLK:=station_2_sensor);
+	Station_3_FallingTrig(CLK:=station_3_sensor);
+	Station_4_FallingTrig(CLK:=station_4_sensor);
+	Station_6_FallingTrig(CLK:=station_6_sensor);
 
 ////////////////////////////////////////////////////////////////////////////////////
-// "PART PRESENT" MODBUS UPDATES                                                  //
+// "PART PRESENT" MODBUS UPDATES (LIKELY NOT UTILIZED)                            //
 // =============================                                                  //
 // Description:                                                                   //
-//     Binary values that inform other devices if there is a part present in a    //
-//     station. Since station 5 does not have a sensor, it is set to 0. Station 6 //
-//     does not simulate an operation, so it is automatically "ready for pickup"  //
-//     when a part trips the sensor.                                              //
+//   Binary values that inform other devices if there is a part present in a      //
+//   station. Since station 5 does not have a sensor, it is set to 0. Station 6   //
+//   does not simulate an operation, so it is automatically "ready for pickup"    //
+//   when a part trips the sensor.                                                //
 //                                                                                //
-//     NOTE: Each station has two bits: One to inform that a part is present in   //
-//           the station, and another to inform that a part is ready for pickup.  // 
+//   NOTE: Each station has two bits: One to inform that a part is present in     //
+//         the station, and another to inform that a part is ready for pickup.    // 
 ////////////////////////////////////////////////////////////////////////////////////
-GVL.mb_Input_Coils[0]  := station_1_sensor;
-GVL.mb_Input_Coils[2]  := station_2_sensor;
-GVL.mb_Input_Coils[4]  := station_3_sensor;
-GVL.mb_Input_Coils[6]  := station_4_sensor;
-GVL.mb_Input_Coils[8]  := 0;
-GVL.mb_Input_Coils[10] := station_6_sensor;
+
+	GVL.mb_Input_Coils[0]  := station_1_sensor;
+	GVL.mb_Input_Coils[2]  := station_2_sensor;
+	GVL.mb_Input_Coils[4]  := station_3_sensor;
+	GVL.mb_Input_Coils[6]  := station_4_sensor;
+	GVL.mb_Input_Coils[8]  := 0;
+	GVL.mb_Input_Coils[10] := station_6_sensor;
 
 ////////////////////////////////////////////////////////////////////////////////////
-// "READY FOR PICKUP" MODBUS UPDATES                                              //
+// "READY FOR PICKUP" MODBUS UPDATES (LIKELY NOT UTILIZED)                        //
 // =================================                                              //
 // Description:                                                                   //
-//     Binary values that inform other devices if the part in the station is      //
-//     ready for pickup. Since station 5 does not have a sensor, it is set to 0.  //
-//     Station 6 does not simulate an operation, so it is automatically "ready    //
-//     for pickup" when a part trips the sensor.                                  //
+//   Binary values that inform other devices if the part in the station is        //
+//   ready for pickup. Since station 5 does not have a sensor, it is set to 0.    //
+//   Station 6 does not simulate an operation, so it is automatically "ready      //
+//   for pickup" when a part trips the sensor.                                    //
 //                                                                                //
-//     NOTE: Each station has two bits: One to inform that a part is present in   //
-//           the station, and another to inform that a part is ready for pickup.  // 
+//   NOTE: Each station has two bits: One to inform that a part is present in     //
+//         the station, and another to inform that a part is ready for pickup.    // 
 ////////////////////////////////////////////////////////////////////////////////////
-//GVL.mb_Input_Coils[1]  := Station_1_Timer.Q;
-//GVL.mb_Input_Coils[3]  := Station_2_Timer.Q;
-//GVL.mb_Input_Coils[5]  := Station_3_Timer.Q;
-//GVL.mb_Input_Coils[7]  := Station_4_Timer.Q;
-GVL.mb_Input_Coils[1]  := Station1_MBData.IR.Machine_State = 3;
-GVL.mb_Input_Coils[3]  := Station2_MBData.IR.Machine_State = 3;
-GVL.mb_Input_Coils[5]  := Station3_MBData.IR.Machine_State = 3;
-GVL.mb_Input_Coils[7]  := Station4_MBData.IR.Machine_State = 3;
-GVL.mb_Input_Coils[9]  := 0;
-GVL.mb_Input_Coils[11] := station_6_sensor;
+
+	GVL.mb_Input_Coils[1]  := Station1_MBData.IR.Machine_State = 3;
+	GVL.mb_Input_Coils[3]  := Station2_MBData.IR.Machine_State = 3;
+	GVL.mb_Input_Coils[5]  := Station3_MBData.IR.Machine_State = 3;
+	GVL.mb_Input_Coils[7]  := Station4_MBData.IR.Machine_State = 3;
+	GVL.mb_Input_Coils[9]  := 0;
+	GVL.mb_Input_Coils[11] := station_6_sensor;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // BUTTON MODBUS UPDATES                                                          //
 // =====================                                                          //
 // Description:                                                                   //
-//     Inform interested parties of the status of enclave buttons.                //
+//   Inform interested parties of the status of enclave buttons.                  //
 ////////////////////////////////////////////////////////////////////////////////////
-GVL.mb_Input_Coils[12] := 0;
-GVL.mb_Input_Coils[13] := red_indicator;
-GVL.mb_Input_Coils[14] := yellow_button;
-GVL.mb_Input_Coils[15] := yellow_indicator;
-GVL.mb_Input_Coils[16] := green_button;
-GVL.mb_Input_Coils[17] := green_indicator;
-GVL.mb_Input_Coils[18] := NOT black_switch;
-GVL.mb_Input_Coils[19] := 0;
+
+	GVL.mb_Input_Coils[12] := 0;
+	GVL.mb_Input_Coils[13] := red_indicator;
+	GVL.mb_Input_Coils[14] := yellow_button;
+	GVL.mb_Input_Coils[15] := yellow_indicator;
+	GVL.mb_Input_Coils[16] := green_button;
+	GVL.mb_Input_Coils[17] := green_indicator;
+	GVL.mb_Input_Coils[18] := NOT black_switch;
+	GVL.mb_Input_Coils[19] := 0;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // OTHER IMPORTANT MODBUS COILS                                                   //
 // ============================                                                   //
 // Description:                                                                   //
-//     Inform interested parties of the status of specific internal values,       //
-//     like the Run/Stop state of the enclave (informs ROS controllers to start   //
-//     their operations). There are also two variables that are used as triggers  //
-//     to be set by other devices (e.g. the HMI) to perform operations within     //
-//     the PLC (e.g. clearing the part counter, and the logged station times.     //
+//   Inform interested parties of the status of specific internal values,         //
+//   like the Run/Stop state of the enclave (informs ROS controllers to start     //
+//   their operations). There are also two variables that are used as triggers    //
+//   to be set by other devices (e.g. the HMI) to perform operations within       //
+//   the PLC (e.g. clearing the part counter, and the logged station times.       //
 ////////////////////////////////////////////////////////////////////////////////////
-GVL.mb_Input_Coils[20] := MasterRunStop;
-GVL.mb_Input_Coils[21] := EmergencyStop;
-ClearPartCounter       := GVL.mb_Output_Coils[1];
-ClearElapsedTimes      := GVL.mb_Output_Coils[2];
+
+	GVL.mb_Input_Coils[20] := MasterRunStop;
+	GVL.mb_Input_Coils[21] := EmergencyStop;
+	ClearPartCounter       := GVL.mb_Output_Coils[1];
+	ClearElapsedTimes      := GVL.mb_Output_Coils[2];
 
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS IN/OUT REGISTERS                                                        //
 // =======================                                                        //
 // Description:                                                                   //
-//     Inform interested parties of specific internal values, and provide input   //
-//     vector for external parameters. Outputs the number of finished parts. Also //
-//     outputs the amount of delay a part currently in a station has endured.     //
+//   Inform interested parties of specific internal values, and provide input     //
+//   vector for external parameters. Outputs the number of finished parts. Also   //
+//   outputs the amount of delay a part currently in a station has endured.       //
 //                                                                                //
-//     Provides an input vector for the setting of each time a station takes to   //
-//     perform its "manufacturing" operation (set by the HMI).                    //
+//   Provides an input vector for the setting of each time a station takes to     //
+//   perform its "manufacturing" operation (set by the HMI).                      //
 ////////////////////////////////////////////////////////////////////////////////////
-GVL.mb_Output_Registers[0] := INT_TO_WORD(FinishedParts);
-Station_1_ProcessTime      := GVL.mb_Output_Registers[1];
-Station_2_ProcessTime      := GVL.mb_Output_Registers[2];
-Station_3_ProcessTime      := GVL.mb_Output_Registers[3];
-Station_4_ProcessTime      := GVL.mb_Output_Registers[4];
-GVL.mb_Output_Registers[5] := UINT_TO_WORD(Station_1_DelayCounter);
-GVL.mb_Output_Registers[6] := UINT_TO_WORD(Station_2_DelayCounter);
-GVL.mb_Output_Registers[7] := UINT_TO_WORD(Station_3_DelayCounter);
-GVL.mb_Output_Registers[8] := UINT_TO_WORD(Station_4_DelayCounter);
- 
-EnclaveExperimentMode      := GVL.mb_Output_Registers[9];
-EnclaveExperimentValue     := GVL.mb_Output_Registers[10];
 
-CurrentExportPartSN        := GVL.mb_Output_Registers[11];
-
-// Experiment Start Time
-GVL.mb_Output_Registers[12] := ExperimentStartTime_0;
-GVL.mb_Output_Registers[13] := ExperimentStartTime_1;
-GVL.mb_Output_Registers[14] := ExperimentStartTime_2;
-GVL.mb_Output_Registers[15] := ExperimentStartTime_3;
+	// How many finished parts has the PLC logged?
+	GVL.mb_Output_Registers[0] := INT_TO_WORD(FinishedParts);
+	// How long should each station machine parts?
+	Station_1_ProcessTime      := GVL.mb_Output_Registers[1];
+	Station_2_ProcessTime      := GVL.mb_Output_Registers[2];
+	Station_3_ProcessTime      := GVL.mb_Output_Registers[3];
+	Station_4_ProcessTime      := GVL.mb_Output_Registers[4];
+	// Value of station machining timer--Likely not used anymore
+	GVL.mb_Output_Registers[5] := UINT_TO_WORD(Station_1_DelayCounter);
+	GVL.mb_Output_Registers[6] := UINT_TO_WORD(Station_2_DelayCounter);
+	GVL.mb_Output_Registers[7] := UINT_TO_WORD(Station_3_DelayCounter);
+	GVL.mb_Output_Registers[8] := UINT_TO_WORD(Station_4_DelayCounter);
+	// Experiment mode can be set by other devices (e.g., HMI)
+	EnclaveExperimentMode      := GVL.mb_Output_Registers[9];
+	EnclaveExperimentValue     := GVL.mb_Output_Registers[10];
+	// Report task execution time to HMI for alerting
+	GVL.mb_Output_Registers[12] := DWORD_TO_WORD(Perf_MaxTaskTime[Perf_LogTime]);
+	//GVL.mb_Output_Registers[12] := DWORD_TO_WORD(ExecutionTime.dwLastExecTime);
 
 ////////////////////////////////////////////////////////////////////////////////////
 // MODBUS OUT REGISTERS                                                           //
 // ====================                                                           //
 // Description:                                                                   //
-//     Inform interested parties of the part serial number that is currently      //
-//     residing in the specific station listed below. Because there are no        //
-//     sensors on the robot jaws, we provide a place holder for the part SN       //
-//     during transfers. The lack of a sensor also makes the robot-to-robot       //
-//     transfer impossible to monitor, so we have a special placeholder for the   //
-//     part SN. This is important, since we do not know whether or not robot 2 is //
-//     currently handling a part, so we need to make sure we are not overwriting  //
-//     the memory location. This can be fixed in the future by adding sensors     //
-//     to the jaws.                                                               //
+//   Inform interested parties of the part serial number that is currently        //
+//   residing in the specific station listed below. Because there are no          //
+//   sensors on the robot jaws, we provide a place holder for the part SN         //
+//   during transfers. The lack of a sensor also makes the robot-to-robot         //
+//   transfer impossible to monitor, so we have a special placeholder for the     //
+//   part SN. This is important, since we do not know whether or not robot 2 is   //
+//   currently handling a part, so we need to make sure we are not overwriting    //
+//   the memory location. This can be fixed in the future by adding sensors       //
+//   to the jaws.                                                                 //
 ////////////////////////////////////////////////////////////////////////////////////
-GVL.mb_Input_Registers[0] := Robot_1_Part_SN;
-GVL.mb_Input_Registers[1] := Robot_2_Part_SN;
-GVL.mb_Input_Registers[2] := Robot_1_to_2_Part_SN;
-GVL.mb_Input_Registers[3] := Station_1_Part_SN;
-GVL.mb_Input_Registers[4] := Station_2_Part_SN;
-GVL.mb_Input_Registers[5] := Station_3_Part_SN;
-GVL.mb_Input_Registers[6] := Station_4_Part_SN;
-GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 
-////////////////////////////////////////////////////////////////////////////////////
-// EXPERIMENT TIME COUNTER                                                        //
-// =======================                                                        //
-// Description:                                                                   //
-//     Keeps track of the amount of time that has ocurred since the experiment    //
-//     was started. Two words are required to reach a maximum of 497 days.        //
-//     Records time in 10 millisecond increments. Time could be tracked with an   //
-//     integer, but conversions would have to be done to fit it in the MODBUS     //
-//     table. It is easier to handle it in HI and LO, and convert offline.        //
-//     The trigger is used to force the logic to ignore the first iteration after //
-//     the MasterRunStop is enabled, as this would permaturely increase the       //       
-//     counter. This code also captures the PLC system time when the experiment   //
-//     is started.                                                                //
-////////////////////////////////////////////////////////////////////////////////////
-WindowsTime(TIMESTR=>WindowsTimeStruct);
-IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
-	ExperimentTime := ExperimentTime + 1;
-ELSE
-	ExperimentTime := 0;
-END_IF
-
-IF GotNewTime THEN
-	ExperimentStartTime_0 := UDINT_TO_WORD(WindowsFILETIME.dwLowDateTime);
-	ExperimentStartTime_1 := UDINT_TO_WORD(SHR(WindowsFILETIME.dwLowDateTime AND 16#FFFF0000,16));
-	ExperimentStartTime_2 := UDINT_TO_WORD(WindowsFILETIME.dwHighDateTime);
-	ExperimentStartTime_3 := UDINT_TO_WORD(SHR(WindowsFILETIME.dwHighDateTime AND 16#FFFF0000,16));
-	GotNewTime := FALSE;
-END_IF
-
+	GVL.mb_Input_Registers[0] := Robot_1_Part_SN;
+	GVL.mb_Input_Registers[1] := Robot_2_Part_SN;
+	GVL.mb_Input_Registers[2] := Robot_1_to_2_Part_SN;
+	GVL.mb_Input_Registers[3] := Station_1_Part_SN;
+	GVL.mb_Input_Registers[4] := Station_2_Part_SN;
+	GVL.mb_Input_Registers[5] := Station_3_Part_SN;
+	GVL.mb_Input_Registers[6] := Station_4_Part_SN;
+	GVL.mb_Input_Registers[7] := Station_6_Part_SN;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // STATION RESIDENCE COUNTERS                                                     //
 // ==========================                                                     //
 // Description:                                                                   //
-//     Each station has a "residence" counter, which monitors how long each part  //
-//     resides in a specific station within the enclave. The logic clears the     //
-//     value if a new part is being added, or if the ClearElapsedTimes variable   //
-//     is set to TRUE. If this is not the initial entry of the part into the      //
-//     station, we continue to count up. The current PLC process iteration time   //
-//     is 10 ms. So the delay is equal to the value multiplied by 10 ms.          //
+//   Each station has a "residence" counter, which monitors how long each part    //
+//   resides in a specific station within the enclave. The logic clears the       //
+//   value if a new part is being added, or if the ClearElapsedTimes variable     //
+//   is set to TRUE. If this is not the initial entry of the part into the        //
+//   station, we continue to count up. The current PLC process iteration time     //
+//   is 10 ms. So the delay is equal to the value multiplied by 10 ms.            //
 //                                                                                //
-//     Again, since the robots do not have sensors, we used the part SN value     //
-//     stored in the robot SN variables to determine if a part is present. If it  //
-//     is, we track the amount of time it is being handled by the robots.         //
-//                                                                                //
-//     NOTE: The delays are NOT cleared when the part leaves the station because  //
-//           we want the HMI to display the last residence time until the next    //
-//           part is placed in the station.                                       //
+//   Again, since the robots do not have sensors, we used the part SN value       //
+//   stored in the robot SN variables to determine if a part is present. If it    //
+//   is, we track the amount of time it is being handled by the robots.           //
 ////////////////////////////////////////////////////////////////////////////////////
-IF Station_1_RisingTrig.Q THEN
-	Station_1_DelayCounter := 0;
-ELSIF station_1_sensor AND MasterRunStop THEN
-	Station_1_DelayCounter := Station_1_DelayCounter + 1;
-END_IF
 
-IF Station_2_RisingTrig.Q THEN
-	Station_2_DelayCounter := 0;
-ELSIF station_2_sensor AND MasterRunStop THEN
-	Station_2_DelayCounter := Station_2_DelayCounter + 1;
-END_IF
-
-IF Station_3_RisingTrig.Q THEN
-	Station_3_DelayCounter := 0;
-ELSIF station_3_sensor AND MasterRunStop THEN
-	Station_3_DelayCounter := Station_3_DelayCounter + 1;
-END_IF
-
-IF Station_4_RisingTrig.Q THEN
-	Station_4_DelayCounter := 0;
-ELSIF station_4_sensor AND MasterRunStop THEN
-	Station_4_DelayCounter := Station_4_DelayCounter + 1;
-END_IF
-
-IF Station_6_RisingTrig.Q THEN
-	Station_6_DelayCounter := 0;
-ELSIF station_6_sensor AND MasterRunStop THEN
-	Station_6_DelayCounter := Station_6_DelayCounter + 1;
-END_IF
-
-IF Robot_1_Part_SN = 0 THEN
-	Robot_1_DelayCounter := 0;
-ELSIF MasterRunStop THEN
-	Robot_1_DelayCounter := Robot_1_DelayCounter + 1;
-END_IF
-IF Robot_1_to_2_Part_SN = 0 THEN
-	Robot_1_to_2_DelayCounter := 0;
-ELSIF MasterRunStop THEN
-	Robot_1_to_2_DelayCounter := Robot_1_to_2_DelayCounter + 1;
-END_IF
-IF Robot_2_Part_SN = 0 THEN
-	Robot_2_DelayCounter := 0;
-ELSIF MasterRunStop THEN
-	Robot_2_DelayCounter := Robot_2_DelayCounter + 1;
-END_IF
+	IF Station_1_RisingTrig.Q THEN
+		Station_1_DelayCounter := 0;
+	ELSIF station_1_sensor AND MasterRunStop THEN
+		Station_1_DelayCounter := Station_1_DelayCounter + 1;
+	END_IF
+	
+	IF Station_2_RisingTrig.Q THEN
+		Station_2_DelayCounter := 0;
+	ELSIF station_2_sensor AND MasterRunStop THEN
+		Station_2_DelayCounter := Station_2_DelayCounter + 1;
+	END_IF
+	
+	IF Station_3_RisingTrig.Q THEN
+		Station_3_DelayCounter := 0;
+	ELSIF station_3_sensor AND MasterRunStop THEN
+		Station_3_DelayCounter := Station_3_DelayCounter + 1;
+	END_IF
+	
+	IF Station_4_RisingTrig.Q THEN
+		Station_4_DelayCounter := 0;
+	ELSIF station_4_sensor AND MasterRunStop THEN
+		Station_4_DelayCounter := Station_4_DelayCounter + 1;
+	END_IF
+	
+	IF Station_6_RisingTrig.Q THEN
+		Station_6_DelayCounter := 0;
+	ELSIF station_6_sensor AND MasterRunStop THEN
+		Station_6_DelayCounter := Station_6_DelayCounter + 1;
+	END_IF
+	
+	IF Robot_1_Part_SN = 0 THEN
+		Robot_1_DelayCounter := 0;
+	ELSIF MasterRunStop THEN
+		Robot_1_DelayCounter := Robot_1_DelayCounter + 1;
+	END_IF
+	IF Robot_1_to_2_Part_SN = 0 THEN
+		Robot_1_to_2_DelayCounter := 0;
+	ELSIF MasterRunStop THEN
+		Robot_1_to_2_DelayCounter := Robot_1_to_2_DelayCounter + 1;
+	END_IF
+	IF Robot_2_Part_SN = 0 THEN
+		Robot_2_DelayCounter := 0;
+	ELSIF MasterRunStop THEN
+		Robot_2_DelayCounter := Robot_2_DelayCounter + 1;
+	END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // CLEAR THE PART TRACKER TIMERS                                                  //
 // =============================                                                  //
 // Description:                                                                   //
-//     Clears the part station timers.                                            //
+//   Clears the part station timers.                                              //
 ////////////////////////////////////////////////////////////////////////////////////
-IF ClearElapsedTimesTrig.Q THEN
-	Station_1_DelayCounter := 0;
-	Station_2_DelayCounter := 0;
-	Station_3_DelayCounter := 0;
-	Station_4_DelayCounter := 0;
-	Station_6_DelayCounter := 0;
-	Robot_1_DelayCounter := 0;
-	Robot_1_to_2_DelayCounter := 0;
-	Robot_2_DelayCounter := 0;
-END_IF
+
+	IF ClearElapsedTimesTrig.Q THEN
+		Station_1_DelayCounter    := 0;
+		Station_2_DelayCounter    := 0;
+		Station_3_DelayCounter    := 0;
+		Station_4_DelayCounter    := 0;
+		Station_6_DelayCounter    := 0;
+		Robot_1_DelayCounter      := 0;
+		Robot_1_to_2_DelayCounter := 0;
+		Robot_2_DelayCounter      := 0;
+	END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // ROBOT OVERCURRENT DETECTION                                                    //
 // ===========================                                                    //
 // Description:                                                                   //
-//     ROS sends the current status of its current monitoring function to the PLC //
-//     in order to react to over-current conditions. If ROS informs the PLC that  //
-//     and over-current condition exists, we trigger a relay which is in-line     //
-//     with the EmergencyStop button. This will trip the Safety PLC and bring the //
-//     robots to a halt.                                                          // 
+//   ROS sends the current status of each joint electrical current to the PLC     //
+//   in order to react to over-current conditions. If ROS informs the PLC that    //
+//   an over-current condition exists, we trigger a relay which is in-line        //
+//   with the EmergencyStop button. This will trip the Safety PLC and bring the   //
+//   robots to a halt.                                                            // 
 ////////////////////////////////////////////////////////////////////////////////////
-IF mb_Output_Coils[0] = TRUE AND overcurrent_relay = TRUE AND black_switch = FALSE THEN
-	overcurrent_relay := FALSE;
-	mb_Output_Coils[0] := FALSE;
-END_IF
+
+	IF mb_Output_Coils[0] = TRUE AND overcurrent_relay = TRUE AND black_switch = FALSE THEN
+		overcurrent_relay := FALSE;
+		mb_Output_Coils[0] := FALSE;
+	END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // CLEAR THE PART COUNTER                                                         //
@@ -514,409 +500,448 @@ END_IF
 // Description:                                                                   //
 //     Clears the part counter when the externally-set variable is TRUE.          //
 ////////////////////////////////////////////////////////////////////////////////////
-IF ClearPartCounter = TRUE THEN
-	FinishedParts := 0;
-END_IF
+
+	IF ClearPartCounter = TRUE THEN
+		FinishedParts := 0;
+	END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// EXPERIMENT TIME COUNTER                                                        //
+// =======================                                                        //
+// Description:                                                                   //
+//   Keeps track of the amount of time that has ocurred since the experiment      //
+//   was started. Two words are required to reach a maximum of 497 days.          //
+//   Records time in 10 millisecond increments. Time could be tracked with an     //
+//   integer, but conversions would have to be done to fit it in the MODBUS       //
+//   table. It is easier to handle it in HI and LO, and convert offline.          //
+//   The trigger is used to force the logic to ignore the first iteration after   //
+//   the MasterRunStop is enabled, as this would permaturely increase the         //       
+//   counter. This code also captures the PLC system time when the experiment     //
+//   is started.                                                                  //
+////////////////////////////////////////////////////////////////////////////////////
+
+	WindowsTime(TIMESTR=>WindowsTimeStruct);
+	IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
+		ExperimentTime := ExperimentTime + 1;
+	ELSE
+		ExperimentTime := 0;
+	END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // MASTER RUN/STOP                                                                //
 // ============================                                                   //
 // Description:                                                                   //
-//     Pressing the green button on the enclave for 2.0 seconds will set the      //
-//     MasterRunStop variable to TRUE, triggering the operation of the enclave.   //
-//     ROS monitors this variable to know when it should perform its operations.  //
-//     If this variable is set to FALSE, the robot operations will NOT cease      //
-//     immediately. The robots will first finish their current task, then return  //
-//     to the CANDLE position.                                                    //
+//   Pressing the green button on the enclave for 2.0 seconds will set the        //
+//   MasterRunStop variable to TRUE, triggering the operation of the enclave.     //
+//   ROS monitors this variable to know when it should perform its operations.    //
+//   If this variable is set to FALSE, the robot operations will NOT cease        //
+//   immediately. The robots will first finish their current task, then return    //
+//   to the CANDLE position.                                                      //
 //                                                                                //
 //********************************************************************************//
-//     WARNING: EMERGENCY OPERATIONS ARE DISABLED WHEN THE ENCLAVE IS PUT IN THE  //
-//              STOP MODE (BY THE BLACK RUN/STOP SWITCH). ROBOTS MAY CONTINUE TO  //
-//              MOVE DURING THIS TRANSITIONAL PERIOD. PLEASE BE CAREFUL.          //
+//   WARNING: EMERGENCY OPERATIONS ARE DISABLED WHEN THE ENCLAVE IS PUT IN THE    //
+//            STOP MODE (BY THE BLACK RUN/STOP SWITCH). ROBOTS WILL CONTINUE TO   //
+//            MOVE DURING THIS TRANSITIONAL PERIOD. PLEASE BE CAREFUL.            //
 //********************************************************************************//
 ////////////////////////////////////////////////////////////////////////////////////
-StartButtonTimer(IN:=green_button, PT:=T#2.0S);
-IF NOT black_switch = TRUE THEN
-	IF NOT MasterRunStop AND green_button AND StartButtonTimer.Q THEN
-		// LOG THE SYSTEM START TIME BEFORE CONTINUING
-		WindowsTime(START:=TRUE);
-		IF NOT WindowsTime.BUSY THEN
-			WindowsTime(START:=FALSE);
-			WindowsFILETIME := SYSTEMTIME_TO_FILETIME(systemTime:=WindowsTimeStruct);
-			MasterRunStop := TRUE;
-			GotNewTime := TRUE;
+
+	StartButtonTimer(IN:=green_button, PT:=T#2.0S);
+	IF NOT black_switch = TRUE THEN
+		IF NOT MasterRunStop AND green_button AND StartButtonTimer.Q THEN
+			// LOG THE SYSTEM START TIME BEFORE CONTINUING
+			WindowsTime(START:=TRUE);
+			IF NOT WindowsTime.BUSY THEN
+				WindowsTime(START:=FALSE);
+				MasterRunStop := TRUE;
+			END_IF
 		END_IF
+	ELSE
+		WindowsTime(START:=FALSE);
+		MasterRunStop := FALSE;
 	END_IF
-ELSE
-	WindowsTime(START:=FALSE);
-	MasterRunStop := FALSE;
-END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // RESET BUTTON                                                                   //
 // ============                                                                   //
 // Description:                                                                   //
-//     At the current moment, this only clears a fault on the over-current relay. //
-//     Also, the ErrorAck variable is monitored by the safety system and is       //
-//     REQUIRED to properly initialize the safety PLC. On initial startup, the    //
-//     yellow button must be cycled to clear the safety PLC.                      //
+//   At the current moment, this only clears a fault on the safety PLC.           //
+//   Also, the ErrorAck variable is monitored by the safety system and is         //
+//   REQUIRED to properly initialize the safety PLC. On initial startup, the      //
+//   yellow button must be cycled to clear the safety PLC.                        //
+//                                                                                //
+//   The ErrorAck variable is monitored by the safety system and is REQUIRED to   //
+//   properly initialize the safety PLC. On initial startup, the yellow button    //
+//   must be cycled to clear the safety PLC.                                      //
 ////////////////////////////////////////////////////////////////////////////////////
-IF yellow_button = TRUE THEN
-	IF NOT black_switch = FALSE THEN
-		// PART COUNTER RESET IS HANDLED BY THE HMI NOW, SO THIS IS DISABLED.		
-		// FinishedParts := 0;
-		overcurrent_relay := TRUE;
+
+	IF yellow_button = TRUE THEN
+		IF NOT black_switch = FALSE THEN
+			overcurrent_relay := TRUE;
+		END_IF
 	END_IF
-END_IF
-
-////////////////////////////////////////////////////////////////////////////////////
-// SAFETY PLC INITIALIZATION                                                      //
-// =========================                                                      //
-// Description:                                                                   //
-//     The ErrorAck variable is monitored by the safety system and is REQUIRED to //
-//     properly initialize the safety PLC. On initial startup, the yellow button  //
-//     must be cycled to clear the safety PLC.                                    //
-////////////////////////////////////////////////////////////////////////////////////
-ErrAck := yellow_button;
-
-
+	ErrAck := yellow_button;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // INDICATOR LOGIC                                                                //
 // ===============                                                                //
 // Description:                                                                   //
-//     The buttons have LEDs, so we must use them. Plus, it looks nice. Yellow    //
-//     button flashes in the STOP state because pressing it resets the safety     //
-//     PLC. In the RUN state the green LED flashes because it will enable the     //
-//     enclave operations. If the MasterRunStop is true, then we constantly       //
-//     illuminate the green LED to inform the operator the robots are active.     //
+//   The buttons have LEDs, so we must use them. Plus, it looks nice. Yellow      //
+//   button flashes in the STOP state because pressing it resets the safety       //
+//   PLC. In the RUN state the green LED flashes because it will enable the       //
+//   enclave operations. If the MasterRunStop is true, then we constantly         //
+//   illuminate the green LED to inform the operator the robots are active.       //
 ////////////////////////////////////////////////////////////////////////////////////
-Indicator_Flash_Timer(IN:=NOT Indicator_Flash_Timer.Q, PT:=T#0.5S);
-IF Indicator_Flash_Timer.Q THEN
-	IF NOT black_switch = TRUE AND MasterRunStop = FALSE THEN
-		yellow_indicator := NOT yellow_indicator;
-		IF EmergencyStop = TRUE THEN 
-			green_indicator := NOT yellow_indicator;
-		ELSE
+
+	Indicator_Flash_Timer(IN:=NOT Indicator_Flash_Timer.Q, PT:=T#0.5S);
+	IF Indicator_Flash_Timer.Q THEN
+		IF NOT black_switch = TRUE AND MasterRunStop = FALSE THEN
+			yellow_indicator := NOT yellow_indicator;
+			IF EmergencyStop = TRUE THEN 
+				green_indicator := NOT yellow_indicator;
+			ELSE
+				green_indicator := FALSE;
+			END_IF
+		ELSIF NOT black_switch = FALSE THEN
 			green_indicator := FALSE;
+			yellow_indicator := FALSE;
 		END_IF
-	ELSIF NOT black_switch = FALSE THEN
-		green_indicator := FALSE;
-		yellow_indicator := FALSE;
-		// PART COUNTER RESET IS HANDLED BY THE HMI NOW, SO THIS IS DISABLED.
-		// yellow_indicator := NOT yellow_indicator; 
 	END_IF
-END_IF
-IF MasterRunStop = TRUE THEN
-	yellow_indicator := FALSE;
-	green_indicator := TRUE;
-END_IF
+	
+	IF MasterRunStop = TRUE THEN
+		yellow_indicator := FALSE;
+		green_indicator := TRUE;
+	END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // EMERGENCY STOP BUTTON INDICATOR LOGIC                                          //
 // =====================================                                          //
 // Description:                                                                   //
-//     The LED in the emergency stop button turns on steady to inform the         //
-//     operator if the Safety PLC is currently active, and turns off when the     //
-//     Safety PLC is disabled. If the Safety PLC faults the safety relay, the PLC //
-//     will flash the emergency stop button LED to inform the operator that the   //
-//     Safety PLC has faulted for an emergency condition.                         //
+//   The LED in the emergency stop button turns on steady to inform the           //
+//   operator if the Safety PLC is currently active, and turns off when the       //
+//   Safety PLC is disabled. If the Safety PLC faults the safety relay, the PLC   //
+//   will flash the emergency stop button LED to inform the operator that the     //
+//   Safety PLC has faulted for an emergency condition.                           //
 ////////////////////////////////////////////////////////////////////////////////////
-EStop_Flash_Timer(IN:=NOT EStop_Flash_Timer.Q, PT:=T#0.125S);
-IF EmergencyStop = TRUE AND NOT black_switch = TRUE THEN
-	red_indicator := TRUE;
-ELSIF EmergencyStop = TRUE AND NOT black_switch = FALSE THEN
-	red_indicator := FALSE;
-ELSE
-	IF MasterRunStop = TRUE THEN
-		MasterRunStop := FALSE;
+
+	EStop_Flash_Timer(IN:=NOT EStop_Flash_Timer.Q, PT:=T#0.125S);
+	IF EmergencyStop = TRUE AND NOT black_switch = TRUE THEN
+		red_indicator := TRUE;
+	ELSIF EmergencyStop = TRUE AND NOT black_switch = FALSE THEN
+		red_indicator := FALSE;
+	ELSE
+		IF MasterRunStop = TRUE THEN
+			MasterRunStop := FALSE;
+		END_IF
+		IF EStop_Flash_Timer.Q THEN
+			red_indicator := NOT red_indicator;
+		END_IF
 	END_IF
-	IF EStop_Flash_Timer.Q THEN
-		red_indicator := NOT red_indicator;
-	END_IF
-END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // PART SERIAL NUMBER TRACKER                                                     //
 // =========================                                                      //
 // Description:                                                                   //
-//     This section contains all of the code to track the parts are they traverse //
-//     the enclave. Sequential part numbers are created when they appear at       //
-//     Station 6 (queue pick-up location). The rising and falling edge triggers   //
-//     are used in this section to detect when parts are leaving or entering a    //
-//     station. These events trigger the transfer of SNs to the different station //
-//     and robot place holder variables. Since the robot transfer operations are  //
-//     not dynamic, we can rely on the fact that (for example) parts leaving      // 
-//     Station 1 will be picked up by Robot 1 and transfered to Station 2.        //
+//   This section contains all of the code to track the parts are they traverse   //
+//   the enclave. Sequential part numbers are created when they appear at         //
+//   Station 6 (queue pick-up location). The rising and falling edge triggers     //
+//   are used in this section to detect when parts are leaving or entering a      //
+//   station. These events trigger the transfer of SNs to the different stations  //
+//   and robot place holder variables. Since the robot transfer operations are    //
+//   not dynamic, we can rely on the fact that (for example) parts leaving        // 
+//   Station 1 will be picked up by Robot 1 and transfered to Station 2.          //
 //                                                                                //
-//     When the part is transferred in or out of a station, the code will grab    //
-//     the current delay timer value and store it in the Part Tracker array. Each //
-//     index of the array is the same as the sequential part SN. This allows a    //
-//     quick and easy way to view how much time each part spent at a specific     //
-//     station/robot within the enclave. Units are in 10's of milliseconds.       //
+//   When the part is transferred in or out of a station, the code will grab      //
+//   the current experiment time and store it in the Part Tracker array. Each   //
+//   index of the array is the same as the sequential part SN. This allows a      //
+//   quick and easy way to view how much time each part spent at a specific       //
+//   station/robot within the enclave. Units are in 10's of milliseconds.         //
 //                                                                                //
-//     The last movement of the part (from Sta. 4 to the queue) is not tracked    //
-//     since Sta. 5 lacks a sensor, as do the robot jaws. Finished parts are      //
-//     counted at the falling-edge of the Sta. 4 sensor. The code also has the    //
-//     capability to track whether Sta. 4 ("Inspection") produced a GOOD or BAD   //
-//     part, but the code to perform that simulation does not currently exist, so //
-//     for now each part is considered GOOD.                                      //
+//   The last movement of the part (from Sta. 4 to the queue) is not tracked      //
+//   since Sta. 5 lacks a sensor, as do the robot jaws. Finished parts are        //
+//   counted at the falling-edge of the Sta. 4 sensor. The code also has the      //
+//   capability to track whether Sta. 4 ("Inspection") produced a GOOD or BAD     //
+//   part, but the code to perform that simulation does not currently exist, so   //
+//   for now each part is considered GOOD.                                        //
 //                                                                                //
-//     If the ClearElapsedTimes external variable is set, it will reset all of    //
-//     the variables and the array to the initial condition.                      //
+//   If the ClearElapsedTimes external variable is set, it will reset all of      //
+//   the variables and the array to the initial condition.                        //
 ////////////////////////////////////////////////////////////////////////////////////
-ClearElapsedTimesTrig(CLK:=ClearElapsedTimes);
-
-IF ClearElapsedTimesTrig.Q THEN
-	FOR PartTrackerClearCTR := 1 TO 512 DO
-		PartTrackerArr[PartTrackerClearCTR].sn := 0;
-		PartTrackerArr[PartTrackerClearCTR].inspection := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_arr := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta1_dep := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_arr := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta2_dep := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_arr := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta3_dep := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta4_arr := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta4_dep := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_arr := 0;
-		PartTrackerArr[PartTrackerClearCTR].sta6_dep := 0;
-	END_FOR
-	Robot_1_Part_SN   := 0;
-	Robot_2_Part_SN   := 0;
-	Robot_1_to_2_Part_SN := 0;
-	Station_1_Part_SN := 0;
-	Station_2_Part_SN := 0;
-	Station_3_Part_SN := 0;
-	Station_4_Part_SN := 0;
-	Station_6_Part_SN := 1;
-	UniquePartSn := 1;
-	PartTrackerArr[1].sn := Station_6_Part_SN;
-	Perf_LogTime := 0;
-END_IF
-
-// STATION 6 LOGIC
-IF Station_6_RisingTrig.Q AND Station_6_Part_SN = 0 THEN
-	UniquePartSn := UniquePartSn + 1;
-	Station_6_Part_SN := UniquePartSn;
-	PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN; // Set the SN
-	PartTrackerArr[Station_6_Part_SN].sta6_arr := ExperimentTime;
-END_IF
-IF Station_6_FallingTrig.Q AND Robot_1_Part_SN = 0 AND Station_1_Part_SN = 0 THEN
-	PartTrackerArr[Station_6_Part_SN].sta6_dep := ExperimentTime;
-	Robot_1_Part_SN := Station_6_Part_SN;
-	Station_6_Part_SN := 0;
-END_IF
-
-// STATION 1 LOGIC
-IF Station_1_RisingTrig.Q AND Station_1_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_Part_SN].sta1_arr := ExperimentTime;
-	Station_1_Part_SN := Robot_1_Part_SN;
-	Robot_1_Part_SN := 0;
-END_IF
-IF Station_1_FallingTrig.Q AND Robot_1_Part_SN = 0 THEN
-	PartTrackerArr[Station_1_Part_SN].sta1_dep := ExperimentTime;
-	Robot_1_Part_SN := Station_1_Part_SN;
-	Station_1_Part_SN := 0;
-END_IF
-
-// STATION 2 LOGIC
-IF Station_2_RisingTrig.Q AND Station_2_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_Part_SN].sta2_arr := ExperimentTime;
-	Station_2_Part_SN := Robot_1_Part_SN;
-	Robot_1_Part_SN := 0;
-END_IF
-IF Station_2_FallingTrig.Q AND Robot_1_to_2_Part_SN = 0 THEN
-	PartTrackerArr[Station_2_Part_SN].sta2_dep := ExperimentTime;
-	Robot_1_to_2_Part_SN := Station_2_Part_SN;
-	Station_2_Part_SN := 0;
-END_IF
-
-// STATION 3 LOGIC
-IF Station_3_RisingTrig.Q AND Station_3_Part_SN = 0 THEN
-	PartTrackerArr[Robot_1_to_2_Part_SN].sta3_arr := ExperimentTime;
-	Station_3_Part_SN := Robot_1_to_2_Part_SN;
-	Robot_1_to_2_Part_SN := 0;
-END_IF
-IF Station_3_FallingTrig.Q AND Robot_2_Part_SN = 0 THEN
-	PartTrackerArr[Station_3_Part_SN].sta3_dep := ExperimentTime;
-	Robot_2_Part_SN := Station_3_Part_SN;
-	Station_3_Part_SN := 0;
-END_IF
-
-// STATION 4 LOGIC
-IF Station_4_RisingTrig.Q AND Station_4_Part_SN = 0 THEN
-	PartTrackerArr[Robot_2_Part_SN].sta4_arr := ExperimentTime;
-	Station_4_Part_SN := Robot_2_Part_SN;
-	Robot_2_Part_SN := 0;
-END_IF
-IF Station_4_FallingTrig.Q AND Station_4_Part_SN > 0 THEN // Only trigger if there is a part in the station
-	PartTrackerArr[Station_4_Part_SN].sta4_dep := ExperimentTime;
-	PartTrackerArr[Station_4_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
-	Station_4_Part_SN := 0;
-	FinishedParts := FinishedParts + 1;
-END_IF
+	
+	ClearElapsedTimesTrig(CLK:=ClearElapsedTimes);
+	
+	IF ClearElapsedTimesTrig.Q THEN
+		FOR PartTrackerClearCTR := 1 TO 512 DO
+			PartTrackerArr[PartTrackerClearCTR].sn := 0;
+			PartTrackerArr[PartTrackerClearCTR].inspection := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta1_arr := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta1_dep := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta2_arr := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta2_dep := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta3_arr := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta3_dep := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta4_arr := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta4_dep := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta6_arr := 0;
+			PartTrackerArr[PartTrackerClearCTR].sta6_dep := 0;
+		END_FOR
+		Robot_1_Part_SN   := 0;
+		Robot_2_Part_SN   := 0;
+		Robot_1_to_2_Part_SN := 0;
+		Station_1_Part_SN := 0;
+		Station_2_Part_SN := 0;
+		Station_3_Part_SN := 0;
+		Station_4_Part_SN := 0;
+		Station_6_Part_SN := 1;
+		UniquePartSn := 1;
+		PartTrackerArr[1].sn := Station_6_Part_SN;
+	END_IF
+	
+	// STATION 6 LOGIC
+	IF Station_6_RisingTrig.Q AND Station_6_Part_SN = 0 THEN
+		UniquePartSn := UniquePartSn + 1;
+		Station_6_Part_SN := UniquePartSn;
+		PartTrackerArr[Station_6_Part_SN].sn := Station_6_Part_SN; // Set the SN
+		PartTrackerArr[Station_6_Part_SN].sta6_arr := ExperimentTime;
+	END_IF
+	IF Station_6_FallingTrig.Q AND Robot_1_Part_SN = 0 AND Station_1_Part_SN = 0 THEN
+		PartTrackerArr[Station_6_Part_SN].sta6_dep := ExperimentTime;
+		Robot_1_Part_SN := Station_6_Part_SN;
+		Station_6_Part_SN := 0;
+	END_IF
+	
+	// STATION 1 LOGIC
+	IF Station_1_RisingTrig.Q AND Station_1_Part_SN = 0 THEN
+		PartTrackerArr[Robot_1_Part_SN].sta1_arr := ExperimentTime;
+		Station_1_Part_SN := Robot_1_Part_SN;
+		Robot_1_Part_SN := 0;
+	END_IF
+	IF Station_1_FallingTrig.Q AND Robot_1_Part_SN = 0 THEN
+		PartTrackerArr[Station_1_Part_SN].sta1_dep := ExperimentTime;
+		Robot_1_Part_SN := Station_1_Part_SN;
+		Station_1_Part_SN := 0;
+	END_IF
+	
+	// STATION 2 LOGIC
+	IF Station_2_RisingTrig.Q AND Station_2_Part_SN = 0 THEN
+		PartTrackerArr[Robot_1_Part_SN].sta2_arr := ExperimentTime;
+		Station_2_Part_SN := Robot_1_Part_SN;
+		Robot_1_Part_SN := 0;
+	END_IF
+	IF Station_2_FallingTrig.Q AND Robot_1_to_2_Part_SN = 0 THEN
+		PartTrackerArr[Station_2_Part_SN].sta2_dep := ExperimentTime;
+		Robot_1_to_2_Part_SN := Station_2_Part_SN;
+		Station_2_Part_SN := 0;
+	END_IF
+	
+	// STATION 3 LOGIC
+	IF Station_3_RisingTrig.Q AND Station_3_Part_SN = 0 THEN
+		PartTrackerArr[Robot_1_to_2_Part_SN].sta3_arr := ExperimentTime;
+		Station_3_Part_SN := Robot_1_to_2_Part_SN;
+		Robot_1_to_2_Part_SN := 0;
+	END_IF
+	IF Station_3_FallingTrig.Q AND Robot_2_Part_SN = 0 THEN
+		PartTrackerArr[Station_3_Part_SN].sta3_dep := ExperimentTime;
+		Robot_2_Part_SN := Station_3_Part_SN;
+		Station_3_Part_SN := 0;
+	END_IF
+	
+	// STATION 4 LOGIC
+	IF Station_4_RisingTrig.Q AND Station_4_Part_SN = 0 THEN
+		PartTrackerArr[Robot_2_Part_SN].sta4_arr := ExperimentTime;
+		Station_4_Part_SN := Robot_2_Part_SN;
+		Robot_2_Part_SN := 0;
+	END_IF
+	IF Station_4_FallingTrig.Q AND Station_4_Part_SN > 0 THEN // Only trigger if there is a part in the station
+		PartTrackerArr[Station_4_Part_SN].sta4_dep := ExperimentTime;
+		PartTrackerArr[Station_4_Part_SN].inspection := 2; // ALWAYS PASS INSPECTION... for now
+		Station_4_Part_SN := 0;
+		FinishedParts := FinishedParts + 1;
+	END_IF
 
 ////////////////////////////////////////////////////////////////////////////////////
 // EXPERIMENT COUNTER/TIMER                                                       //
 // ========================                                                       //
 // Description:                                                                   //
-//     The enclave can be instructed to run:                                      //
-//         * continuously                                                         //
-//         * for a specified amount of time                                       //
-//         * for a specified number of parts                                      //
-//     This is controlled via the HMI. The code to operate this is below. The     //
-//     mode of operation is selected in the HMI, and tracking is started once     //
-//     the MasterRunStop goes HIGH. Upon reaching a limit (# of parts, time) the  //
-//     PLC will set the MasterRunStop to FALSE, which will cease robot movement   //
-//     once they have completed their current movements.                          //
+//   The enclave can be instructed to run:                                        //
+//       * continuously                                                           //
+//       * for a specified amount of time                                         //
+//       * for a specified number of parts                                        //
+//   This is controlled via the HMI. The code to operate this is below. The       //
+//   mode of operation is selected in the HMI, and tracking is started once       //
+//   the MasterRunStop goes HIGH. Upon reaching a limit (# of parts, time) the    //
+//   PLC will set the MasterRunStop to FALSE, which will cease robot movement     //
+//   once they have completed their current movements.                            //
 ////////////////////////////////////////////////////////////////////////////////////
 
-IF MasterRunStop = TRUE THEN
-	// Don't test for FREE RUN mode - only for PART COUNTER or TIMER mode
-	IF EnclaveExperimentMode = 1 THEN // Timer Mode
-		IF EnclaveExperimentTime_Counter >= EnclaveExperimentValue THEN
-			MasterRunStop := FALSE;
+	IF MasterRunStop = TRUE THEN
+		// Don't test for FREE RUN mode - only for PART COUNTER or TIMER mode
+		IF EnclaveExperimentMode = 1 THEN // Timer Mode
+			IF EnclaveExperimentTime_Counter >= EnclaveExperimentValue THEN
+				MasterRunStop := FALSE;
+			END_IF
+			// Track the elapsed time (10 ms task, therefore 10ms*100iterations = 1 sec)
+			EnclaveExperimentTime_msCounter := EnclaveExperimentTime_msCounter + 1;
+			IF EnclaveExperimentTime_msCounter >= 100 THEN
+				EnclaveExperimentTime_Counter := EnclaveExperimentTime_Counter + 1;
+				EnclaveExperimentTime_msCounter := 0;
+			END_IF
+		ELSIF EnclaveExperimentMode = 2 THEN // PartCounter Mode
+			IF FinishedParts >= WORD_TO_INT(EnclaveExperimentValue) THEN
+				MasterRunStop := FALSE;
+			END_IF
 		END_IF
-		// Track the elapsed time (10 ms task, therefore 10ms*100iterations = 1 sec)
-		EnclaveExperimentTime_msCounter := EnclaveExperimentTime_msCounter + 1;
-		IF EnclaveExperimentTime_msCounter >= 100 THEN
-			EnclaveExperimentTime_Counter := EnclaveExperimentTime_Counter + 1;
-			EnclaveExperimentTime_msCounter := 0;
+	ELSE // If MasterRunStop is FALSE, then we need to clear the timer
+		EnclaveExperimentTime_Counter := 0;
+	END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// STATION MODE TIMERS                                                            //
+// ===================                                                            //
+// Description:                                                                   //
+//   CURRENT INACTIVE! Intended to log the amount of time the stations are in     //
+//   each mode.                                                                   //
+////////////////////////////////////////////////////////////////////////////////////
+
+	IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
+		///////////////
+		// Station 1 //
+		///////////////
+		IF station_1_sensor = TRUE AND Station_1_Timer.Q = TRUE THEN
+			Station_1_Counters.Waiting_Counter := Station_1_Counters.Waiting_Counter + 1;
+		ELSIF station_1_sensor = TRUE AND Station_1_Timer.Q = FALSE THEN 
+			Station_1_Counters.Process_Counter := Station_1_Counters.Process_Counter + 1;
+		ELSIF station_1_sensor = FALSE THEN
+			Station_1_Counters.Idle_Counter := Station_1_Counters.Idle_Counter + 1;
 		END_IF
-	ELSIF EnclaveExperimentMode = 2 THEN // PartCounter Mode
-		IF FinishedParts >= WORD_TO_INT(EnclaveExperimentValue) THEN
-			MasterRunStop := FALSE;
+		///////////////
+		// Station 2 //
+		///////////////
+		IF station_2_sensor = TRUE AND Station_2_Timer.Q = TRUE THEN
+			Station_2_Counters.Waiting_Counter := Station_2_Counters.Waiting_Counter + 1;
+		ELSIF station_2_sensor = TRUE AND Station_2_Timer.Q = FALSE THEN 
+			Station_2_Counters.Process_Counter := Station_2_Counters.Process_Counter + 1;
+		ELSIF station_2_sensor = FALSE THEN
+			Station_2_Counters.Idle_Counter := Station_2_Counters.Idle_Counter + 1;
+		END_IF
+		///////////////
+		// Station 3 //
+		///////////////
+		IF station_3_sensor = TRUE AND Station_3_Timer.Q = TRUE THEN
+			Station_3_Counters.Waiting_Counter := Station_3_Counters.Waiting_Counter + 1;
+		ELSIF station_3_sensor = TRUE AND Station_3_Timer.Q = FALSE THEN 
+			Station_3_Counters.Process_Counter := Station_3_Counters.Process_Counter + 1;
+		ELSIF station_3_sensor = FALSE THEN
+			Station_3_Counters.Idle_Counter := Station_3_Counters.Idle_Counter + 1;
+		END_IF
+		///////////////
+		// Station 4 //
+		///////////////
+		IF station_4_sensor = TRUE AND Station_4_Timer.Q = TRUE THEN
+			Station_4_Counters.Waiting_Counter := Station_4_Counters.Waiting_Counter + 1;
+		ELSIF station_4_sensor = TRUE AND Station_4_Timer.Q = FALSE THEN 
+			Station_4_Counters.Process_Counter := Station_4_Counters.Process_Counter + 1;
+		ELSIF station_4_sensor = FALSE THEN
+			Station_4_Counters.Idle_Counter := Station_4_Counters.Idle_Counter + 1;
 		END_IF
 	END_IF
-ELSE // If MasterRunStop is FALSE, then we need to clear the timer
-	EnclaveExperimentTime_Counter := 0;
-END_IF
-
-//////////////////////////////////////////////
-// Code for tracking station specific times //
-// e.g. idle, processing, and waiting       //
-//////////////////////////////////////////////
-IF MasterRunStop = TRUE AND ExperimentStartTrig.Q = FALSE THEN
-	///////////////
-	// Station 1 //
-	///////////////
-	IF station_1_sensor = TRUE AND Station_1_Timer.Q = TRUE THEN
-		Station_1_Counters.Waiting_Counter := Station_1_Counters.Waiting_Counter + 1;
-	ELSIF station_1_sensor = TRUE AND Station_1_Timer.Q = FALSE THEN 
-		Station_1_Counters.Process_Counter := Station_1_Counters.Process_Counter + 1;
-	ELSIF station_1_sensor = FALSE THEN
-		Station_1_Counters.Idle_Counter := Station_1_Counters.Idle_Counter + 1;
+	
+	IF ClearElapsedTimesTrig.Q THEN
+		Station_1_Counters.Idle_Counter := 0;
+		Station_1_Counters.Process_Counter := 0;
+		Station_1_Counters.Waiting_Counter := 0;
+		Station_2_Counters.Idle_Counter := 0;
+		Station_2_Counters.Process_Counter := 0;
+		Station_2_Counters.Waiting_Counter := 0;
+		Station_3_Counters.Idle_Counter := 0;
+		Station_3_Counters.Process_Counter := 0;
+		Station_3_Counters.Waiting_Counter := 0;
+		Station_4_Counters.Idle_Counter := 0;
+		Station_4_Counters.Process_Counter := 0;
+		Station_4_Counters.Waiting_Counter := 0;
 	END_IF
-	///////////////
-	// Station 2 //
-	///////////////
-	IF station_2_sensor = TRUE AND Station_2_Timer.Q = TRUE THEN
-		Station_2_Counters.Waiting_Counter := Station_2_Counters.Waiting_Counter + 1;
-	ELSIF station_2_sensor = TRUE AND Station_2_Timer.Q = FALSE THEN 
-		Station_2_Counters.Process_Counter := Station_2_Counters.Process_Counter + 1;
-	ELSIF station_2_sensor = FALSE THEN
-		Station_2_Counters.Idle_Counter := Station_2_Counters.Idle_Counter + 1;
-	END_IF
-	///////////////
-	// Station 3 //
-	///////////////
-	IF station_3_sensor = TRUE AND Station_3_Timer.Q = TRUE THEN
-		Station_3_Counters.Waiting_Counter := Station_3_Counters.Waiting_Counter + 1;
-	ELSIF station_3_sensor = TRUE AND Station_3_Timer.Q = FALSE THEN 
-		Station_3_Counters.Process_Counter := Station_3_Counters.Process_Counter + 1;
-	ELSIF station_3_sensor = FALSE THEN
-		Station_3_Counters.Idle_Counter := Station_3_Counters.Idle_Counter + 1;
-	END_IF
-	///////////////
-	// Station 4 //
-	///////////////
-	IF station_4_sensor = TRUE AND Station_4_Timer.Q = TRUE THEN
-		Station_4_Counters.Waiting_Counter := Station_4_Counters.Waiting_Counter + 1;
-	ELSIF station_4_sensor = TRUE AND Station_4_Timer.Q = FALSE THEN 
-		Station_4_Counters.Process_Counter := Station_4_Counters.Process_Counter + 1;
-	ELSIF station_4_sensor = FALSE THEN
-		Station_4_Counters.Idle_Counter := Station_4_Counters.Idle_Counter + 1;
-	END_IF
-END_IF
-
-IF ClearElapsedTimesTrig.Q THEN
-	Station_1_Counters.Idle_Counter := 0;
-	Station_1_Counters.Process_Counter := 0;
-	Station_1_Counters.Waiting_Counter := 0;
-	Station_2_Counters.Idle_Counter := 0;
-	Station_2_Counters.Process_Counter := 0;
-	Station_2_Counters.Waiting_Counter := 0;
-	Station_3_Counters.Idle_Counter := 0;
-	Station_3_Counters.Process_Counter := 0;
-	Station_3_Counters.Waiting_Counter := 0;
-	Station_4_Counters.Idle_Counter := 0;
-	Station_4_Counters.Process_Counter := 0;
-	Station_4_Counters.Waiting_Counter := 0;
-END_IF
-
 
 ////////////////////////////////////////////////////////////////////////////////////
 // PART TRACKER TIMES EXPORT                                                      //
 // =========================                                                      //
 // Description:                                                                   //
-//     Exports data from the PLC to the requestor. Operates over MODBUS TCP.      //
-//     The input register MODBUS value (as set by the external user) defines      //
-//     what data is currently residing in the output registers. Only one set      //
-//     of data is exported at a time.                                             //
+//   Exports part data from the PLC. Values are updated on parts leaving Sta4.    //
 ////////////////////////////////////////////////////////////////////////////////////
-IF Station_4_FallingTrig.Q THEN
-	GVL.mb_Input_Registers[20] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sn);
-	GVL.mb_Input_Registers[21] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sn        AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[22] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_arr);
-	GVL.mb_Input_Registers[23] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_arr  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[24] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_dep);
-	GVL.mb_Input_Registers[25] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_dep  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[26] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_arr);
-	GVL.mb_Input_Registers[27] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_arr  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[28] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_dep);
-	GVL.mb_Input_Registers[29] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_dep  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[30] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_arr);
-	GVL.mb_Input_Registers[31] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_arr  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[32] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_dep);
-	GVL.mb_Input_Registers[33] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_dep  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[34] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_arr);
-	GVL.mb_Input_Registers[35] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_arr  AND 16#FFFF0000,16));
-	
-	GVL.mb_Input_Registers[36] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_dep);
-	GVL.mb_Input_Registers[37] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_dep  AND 16#FFFF0000,16));
-	
-END_IF
+
+	IF Station_4_FallingTrig.Q THEN
+		GVL.mb_Input_Registers[20] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sn);
+		GVL.mb_Input_Registers[21] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sn        AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[22] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_arr);
+		GVL.mb_Input_Registers[23] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_arr  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[24] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta1_dep);
+		GVL.mb_Input_Registers[25] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta1_dep  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[26] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_arr);
+		GVL.mb_Input_Registers[27] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_arr  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[28] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta2_dep);
+		GVL.mb_Input_Registers[29] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta2_dep  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[30] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_arr);
+		GVL.mb_Input_Registers[31] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_arr  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[32] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta3_dep);
+		GVL.mb_Input_Registers[33] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta3_dep  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[34] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_arr);
+		GVL.mb_Input_Registers[35] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_arr  AND 16#FFFF0000,16));
+		
+		GVL.mb_Input_Registers[36] := UDINT_TO_WORD(PartTrackerArr[FinishedParts].sta4_dep);
+		GVL.mb_Input_Registers[37] := UDINT_TO_WORD(SHR(PartTrackerArr[FinishedParts].sta4_dep  AND 16#FFFF0000,16));
+		
+	END_IF
+
+////////////////////////////////////////////////////////////////////////////////////
+// ENVIRONMENTAL DATA GENERATOR                                                   //
+// ============================                                                   //
+// Description:                                                                   //
+//   Added to simulate the temperature within the workcell. Fluctuates due to     //
+//   sensor noise around the setpoint. If you change the setpoint, the temp will  //
+//   rise/fall until it reaches the new setpoint. Can simulate environmental      //
+//   events in regards to temperature changes outside of bounds.                  //
+//                                                                                //
+//   Temperature is output as a word in tenths of a degree to MBTCP.              //
+////////////////////////////////////////////////////////////////////////////////////
+
+	temperatureProbe(setpoint:=roomTempSetpoint, temperature=>roomTemperature);
+	GVL.mb_Output_Registers[13] := LREAL_TO_WORD(roomTemperature);
+
+////////////////////////////////////////////////////////////////////////////////////
+// MODBUS WRITE                                                                   //
+// ============                                                                   //
+// Description:                                                                   //
+//   Now that all of the logic has been performed by the PLC, push the data to    //
+//   the individual stations.                                                     //
+////////////////////////////////////////////////////////////////////////////////////
+
+	Station1_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station1_MBData.CO.Robot_Proximity);
+	Station2_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station2_MBData.CO.Robot_Proximity);
+	Station3_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station3_MBData.CO.Robot_Proximity);
+	Station4_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station4_MBData.CO.Robot_Proximity);
 
 ////////////////////////////////////////////////////////////////////////////////////
 // PERFORMANCE LOGGERS                                                            //
 // ===================                                                            //
-//                                                                                //
+// Description:                                                                   //
+//   Stop the performance loggers. Clear the arrays if requested.                 //
 ////////////////////////////////////////////////////////////////////////////////////
-TC_Profiler1(bStart := FALSE);
-TC_CpuUsage1(START:=FALSE);
 
-IF ClearElapsedTimesTrig.Q THEN
-	FOR Perf_ClearCTR := 1 TO 16383 DO
-		Perf_CPUUsage[Perf_ClearCTR] := -1;
-		Perf_TaskTime[Perf_ClearCTR] := -1;
-	END_FOR
-END_IF
-
-
-// Now that we're done, update the MODBUS registers
-Station1_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station1_MBData.CO.Robot_Proximity);
-Station2_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station2_MBData.CO.Robot_Proximity);
-Station3_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station3_MBData.CO.Robot_Proximity);
-Station4_MBFunc(perform_write := TRUE, system_mode := BOOL_TO_WORD(NOT black_switch), system_estop := EmergencyStop, robot_prox := Station4_MBData.CO.Robot_Proximity);
-]]></ST>
+	TC_Profiler1(bStart := FALSE);
+	TC_CpuUsage1(START:=FALSE);
+	IF ClearElapsedTimesTrig.Q THEN
+		FOR Perf_ClearCTR := 1 TO 16383 DO
+			Perf_CPUUsage[Perf_ClearCTR] := -1;
+			Perf_TaskTime[Perf_ClearCTR] := -1;
+			Perf_MaxTaskTime[Perf_ClearCTR] := -1;
+			Perf_LogTime := 0;
+		END_FOR
+	END_IF]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>
